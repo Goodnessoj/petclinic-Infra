@@ -36,3 +36,30 @@ output "ecr_repository_names" {
   description = "List of ECR repository names"
   value       = module.ecr.repository_names
 }
+
+# ============================================
+# RDS Outputs
+# ============================================
+output "rds_endpoint" {
+  description = "RDS instance endpoint"
+  value       = module.rds.db_endpoint
+}
+
+output "rds_secret_arn" {
+  description = "Secrets Manager secret ARN for database credentials"
+  value       = module.rds.db_secret_arn
+}
+
+# ============================================
+# Secrets Outputs
+# ============================================
+output "openai_secret_arn" {
+  description = "OpenAI API key secret ARN"
+  value       = module.secrets.openai_secret_arn
+}
+
+output "grafana_secret_arn" {
+  description = "Grafana admin secret ARN"
+  value       = module.secrets.grafana_secret_arn
+}
+
