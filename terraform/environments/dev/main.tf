@@ -22,3 +22,10 @@ module "vpc" {
   vpc_cidr           = var.vpc_cidr
   availability_zones = var.availability_zones
 }
+
+# ECR Module
+module "ecr" {
+  source = "../../modules/ecr"
+
+  environment = var.environment
+}
