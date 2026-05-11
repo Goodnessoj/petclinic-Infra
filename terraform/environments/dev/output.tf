@@ -1,0 +1,20 @@
+# VPC Outputs
+output "vpc_id" {
+  description = "VPC ID"
+  value       = module.vpc.vpc_id
+}
+
+output "public_subnet_ids" {
+  description = "Public subnet IDs"
+  value       = module.vpc.public_subnet_ids
+}
+
+output "eks_cluster_security_group_id" {
+  description = "EKS cluster security group ID"
+  value       = module.vpc.eks_cluster_security_group_id
+}
+
+output "microservices_security_group_id" {
+  description = "Microservices security group ID"
+  value       = module.vpc.microservices_security_group_id
+}
