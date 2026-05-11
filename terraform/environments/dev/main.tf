@@ -22,3 +22,16 @@ module "vpc" {
   vpc_cidr           = var.vpc_cidr
   availability_zones = var.availability_zones
 }
+
+# Observability Module
+module "observability" {
+  source = "../../modules/observability"
+
+  project_name = var.project_name
+  environment  = var.environment
+}
+
+# GitHub OIDC Module
+module "github_oidc" {
+  source = "../../modules/github-oidc"
+}

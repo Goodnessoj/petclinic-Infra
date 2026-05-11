@@ -18,3 +18,4 @@ output "microservices_security_group_id" {
   description = "Microservices security group ID"
   value       = module.vpc.microservices_security_group_id
 }
+
