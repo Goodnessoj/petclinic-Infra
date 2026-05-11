@@ -19,3 +19,20 @@ output "microservices_security_group_id" {
   value       = module.vpc.microservices_security_group_id
 }
 
+# ============================================
+# ECR Outputs
+# ============================================
+output "ecr_registry_url" {
+  description = "ECR registry URL"
+  value       = module.ecr.registry_url
+}
+
+output "ecr_repository_urls" {
+  description = "Map of service names to ECR repository URLs"
+  value       = module.ecr.repository_urls
+}
+
+output "ecr_repository_names" {
+  description = "List of ECR repository names"
+  value       = module.ecr.repository_names
+}

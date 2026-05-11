@@ -34,4 +34,9 @@ module "observability" {
 # GitHub OIDC Module
 module "github_oidc" {
   source = "../../modules/github-oidc"
+# ECR Module
+module "ecr" {
+  source = "../../modules/ecr"
+
+  environment = var.environment
 }
