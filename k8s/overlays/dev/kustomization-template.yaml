@@ -1,0 +1,36 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: petclinic-dev
+
+resources:
+  - ../../base
+
+images:
+  - name: petclinic-dev-config-server
+    newName: ${ECR_REGISTRY}/petclinic-dev-config-server
+    newTag: ${IMAGE_TAG}
+  - name: petclinic-dev-discovery-server
+    newName: ${ECR_REGISTRY}/petclinic-dev-discovery-server
+    newTag: ${IMAGE_TAG}
+  - name: petclinic-dev-api-gateway
+    newName: ${ECR_REGISTRY}/petclinic-dev-api-gateway
+    newTag: ${IMAGE_TAG}
+  - name: petclinic-dev-customers-service
+    newName: ${ECR_REGISTRY}/petclinic-dev-customers-service
+    newTag: ${IMAGE_TAG}
+  - name: petclinic-dev-vets-service
+    newName: ${ECR_REGISTRY}/petclinic-dev-vets-service
+    newTag: ${IMAGE_TAG}
+  - name: petclinic-dev-visits-service
+    newName: ${ECR_REGISTRY}/petclinic-dev-visits-service
+    newTag: ${IMAGE_TAG}
+  - name: petclinic-dev-genai-service
+    newName: ${ECR_REGISTRY}/petclinic-dev-genai-service
+    newTag: ${IMAGE_TAG}
+  - name: petclinic-dev-admin-server
+    newName: ${ECR_REGISTRY}/petclinic-dev-admin-server
+    newTag: ${IMAGE_TAG}
+
+# Add dev-specific patches or overlays here as needed.
+# Copy or rename this file to kustomization.yaml when ready to deploy.

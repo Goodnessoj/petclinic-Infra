@@ -1,0 +1,33 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: petclinic-dev
+
+resources:
+  - ../../base
+
+images:
+  - name: petclinic-dev-config-server
+    newName: /petclinic-dev-config-server
+    newTag: 
+  - name: petclinic-dev-discovery-server
+    newName: /petclinic-dev-discovery-server
+    newTag: 
+  - name: petclinic-dev-api-gateway
+    newName: /petclinic-dev-api-gateway
+    newTag: 
+  - name: petclinic-dev-customers-service
+    newName: /petclinic-dev-customers-service
+    newTag: 
+  - name: petclinic-dev-vets-service
+    newName: /petclinic-dev-vets-service
+    newTag: 
+  - name: petclinic-dev-visits-service
+    newName: /petclinic-dev-visits-service
+    newTag: 
+  - name: petclinic-dev-genai-service
+    newName: /petclinic-dev-genai-service
+    newTag: 
+  - name: petclinic-dev-admin-server
+    newName: /petclinic-dev-admin-server
+    newTag: 
