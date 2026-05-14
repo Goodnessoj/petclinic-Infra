@@ -3,7 +3,7 @@ nameOverride: admin-server
 image:
   registry: 974263620909.dkr.ecr.us-east-2.amazonaws.com
   repository: petclinic-dev-admin-server
-  tag: "ccbebb7"
+  tag: "fb9f481"
   pullPolicy: IfNotPresent
 
 service:
