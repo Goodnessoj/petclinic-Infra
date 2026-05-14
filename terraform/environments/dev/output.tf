@@ -1,29 +1,40 @@
-# VPC Outputs
 output "vpc_id" {
-  description = "VPC ID"
+  description = "VPC ID."
   value       = module.vpc.vpc_id
 }
 
 output "public_subnet_ids" {
-  description = "Public subnet IDs"
+  description = "Public subnet IDs."
   value       = module.vpc.public_subnet_ids
 }
 
+output "eks_cluster_name" {
+  description = "EKS cluster name."
+  value       = module.eks.cluster_name
+}
+
+output "eks_cluster_endpoint" {
+  description = "EKS cluster endpoint."
+  value       = module.eks.cluster_endpoint
+}
+
 output "eks_cluster_security_group_id" {
-  description = "EKS cluster security group ID"
+  description = "VPC security group attached to the EKS control plane."
   value       = module.vpc.eks_cluster_security_group_id
 }
 
-output "microservices_security_group_id" {
-  description = "Microservices security group ID"
-  value       = module.vpc.microservices_security_group_id
+output "eks_cluster_admin_principal" {
+  description = "GitHub Actions principal intended for cluster administration."
+  value       = module.github_oidc.github_actions_role_arn
 }
 
-# ============================================
-# ECR Outputs
-# ============================================
+output "kubectl_update_kubeconfig_command" {
+  description = "Command for updating local kubeconfig."
+  value       = "aws eks update-kubeconfig --region ${var.aws_region} --name ${module.eks.cluster_name}"
+}
+
 output "ecr_registry_url" {
-  description = "ECR registry URL"
+  description = "ECR registry URL without a repository name."
   value       = module.ecr.registry_url
 }
 
@@ -37,29 +48,87 @@ output "ecr_repository_names" {
   value       = module.ecr.repository_names
 }
 
-# ============================================
-# RDS Outputs
-# ============================================
 output "rds_endpoint" {
-  description = "RDS instance endpoint"
+  description = "RDS instance endpoint."
   value       = module.rds.db_endpoint
 }
 
 output "rds_secret_arn" {
-  description = "Secrets Manager secret ARN for database credentials"
+  description = "Secrets Manager secret ARN for database credentials."
   value       = module.rds.db_secret_arn
 }
 
-# ============================================
-# Secrets Outputs
-# ============================================
-output "openai_secret_arn" {
-  description = "OpenAI API key secret ARN"
-  value       = module.secrets.openai_secret_arn
+output "rds_secret_name" {
+  description = "Secrets Manager secret name consumed by the Helm chart ExternalSecret."
+  value       = module.rds.db_secret_name
 }
 
 output "grafana_secret_arn" {
-  description = "Grafana admin secret ARN"
+  description = "Grafana admin secret ARN."
   value       = module.secrets.grafana_secret_arn
 }
 
+output "openai_secret_arn" {
+  description = "OpenAI API key secret ARN."
+  value       = module.secrets.openai_secret_arn
+}
+
+output "github_oidc_provider_arn" {
+  description = "GitHub Actions OIDC provider ARN."
+  value       = module.github_oidc.oidc_provider_arn
+}
+
+output "github_actions_role_arn" {
+  description = "IAM role ARN assumed by GitHub Actions."
+  value       = module.github_oidc.github_actions_role_arn
+}
+
+output "external_secrets_role_arn" {
+  description = "External Secrets Operator IRSA role ARN."
+  value       = module.addons.external_secrets_role_arn
+}
+
+output "lb_controller_role_arn" {
+  description = "AWS Load Balancer Controller IRSA role ARN."
+  value       = module.eks.lb_controller_role_arn
+}
+
+output "aws_load_balancer_controller_role_arn" {
+  description = "AWS Load Balancer Controller IRSA role ARN."
+  value       = module.addons.aws_load_balancer_controller_role_arn
+}
+
+output "microservices_security_group_id" {
+  description = "Application load balancer / microservices security group ID."
+  value       = module.vpc.microservices_security_group_id
+}
+
+output "route53_zone_id" {
+  description = "Route 53 hosted zone ID."
+  value       = try(module.dns_ingress[0].route53_zone_id, null)
+}
+
+output "root_domain_name" {
+  description = "Root domain name."
+  value       = try(module.dns_ingress[0].root_domain_name, null)
+}
+
+output "app_domain_name" {
+  description = "Full application domain name."
+  value       = try(module.dns_ingress[0].app_domain_name, null)
+}
+
+output "acm_certificate_arn" {
+  description = "Validated ACM certificate ARN."
+  value       = try(module.dns_ingress[0].acm_certificate_arn, null)
+}
+
+output "acm_certificate_validation_id" {
+  description = "ACM certificate validation ID."
+  value       = try(module.dns_ingress[0].acm_certificate_validation_id, null)
+}
+
+output "hosted_zone_name_servers" {
+  description = "Route 53 hosted zone name servers."
+  value       = try(module.dns_ingress[0].hosted_zone_name_servers, [])
+}
