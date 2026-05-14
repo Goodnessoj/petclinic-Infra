@@ -23,7 +23,7 @@ podAnnotations: {}
 podLabels: {}
 
 podSecurityContext:
-  runAsNonRoot: true
+  runAsNonRoot: false
   seccompProfile:
     type: RuntimeDefault
 
@@ -89,7 +89,7 @@ probes:
       timeoutSeconds: 5
       failureThreshold: 6
   startup:
-    enabled: false
+    enabled: true
     spec:
       tcpSocket:
         port: http

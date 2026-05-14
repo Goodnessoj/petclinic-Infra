@@ -98,6 +98,11 @@ output "aws_load_balancer_controller_role_arn" {
   value       = module.addons.aws_load_balancer_controller_role_arn
 }
 
+output "application_namespace" {
+  description = "Kubernetes namespace created for the Petclinic application."
+  value       = module.addons.application_namespace
+}
+
 output "microservices_security_group_id" {
   description = "Application load balancer / microservices security group ID."
   value       = module.vpc.microservices_security_group_id

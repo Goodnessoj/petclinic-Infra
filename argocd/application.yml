@@ -12,7 +12,7 @@ spec:
     targetRevision: main
     path: argocd
     directory:
-      exclude: application.yml
+      exclude: "{application.yml,namespace.yml,ingress.yml}"
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd

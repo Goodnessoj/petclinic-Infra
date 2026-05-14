@@ -1,8 +1,21 @@
 locals {
   external_secrets_namespace       = "external-secrets"
   external_secrets_service_account = "external-secrets"
+  application_namespace            = "petclinic-dev"
   load_balancer_namespace          = "kube-system"
   load_balancer_service_account    = "aws-load-balancer-controller"
+}
+
+resource "kubernetes_namespace_v1" "application" {
+  metadata {
+    name = local.application_namespace
+
+    labels = {
+      "app.kubernetes.io/name"    = "petclinic"
+      "app.kubernetes.io/part-of" = "petclinic"
+      "petclinic.io/environment"  = "dev"
+    }
+  }
 }
 
 resource "helm_release" "external_secrets" {

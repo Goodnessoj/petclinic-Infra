@@ -17,3 +17,8 @@ output "argocd_namespace" {
   description = "Namespace where Argo CD is installed."
   value       = helm_release.argocd.namespace
 }
+
+output "application_namespace" {
+  description = "Namespace where the Petclinic application is deployed."
+  value       = kubernetes_namespace_v1.application.metadata[0].name
+}

@@ -10,6 +10,17 @@ service:
   port: 80
   targetPort: 8080
 
+ingress:
+  enabled: true
+  className: alb
+  host: petclinic.goodnessoj.site
+  albName: petclinic-dev
+  listenPorts:
+    - HTTP: 80
+  sslRedirect: ""
+  annotations:
+    alb.ingress.kubernetes.io/group.name: petclinic-dev
+
 env:
   SPRING_PROFILES_ACTIVE: docker
   CONFIG_SERVER_URL: http://config-server:8888/

@@ -9,7 +9,9 @@ metadata:
     alb.ingress.kubernetes.io/scheme: {{ .Values.ingress.scheme | quote }}
     alb.ingress.kubernetes.io/target-type: {{ .Values.ingress.targetType | quote }}
     alb.ingress.kubernetes.io/listen-ports: {{ .Values.ingress.listenPorts | toJson | quote }}
+    {{- if .Values.ingress.sslRedirect }}
     alb.ingress.kubernetes.io/ssl-redirect: {{ .Values.ingress.sslRedirect | quote }}
+    {{- end }}
     {{- if .Values.ingress.albName }}
     alb.ingress.kubernetes.io/load-balancer-name: {{ .Values.ingress.albName | quote }}
     {{- end }}

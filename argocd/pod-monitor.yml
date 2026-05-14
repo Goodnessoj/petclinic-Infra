@@ -8,7 +8,7 @@ metadata:
 spec:
   namespaceSelector:
     matchNames:
-      - petclinic
+      - petclinic-dev
   selector:
     matchLabels:
       app.kubernetes.io/part-of: petclinic

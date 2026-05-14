@@ -39,7 +39,7 @@ spec:
             - "../../helm-values/{{valuesFile}}"
       destination:
         server: https://kubernetes.default.svc
-        namespace: petclinic
+        namespace: petclinic-dev
       syncPolicy:
         automated:
           prune: true

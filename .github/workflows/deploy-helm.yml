@@ -1,0 +1,121 @@
+name: Deploy Helm Chart
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to deploy.
+        required: true
+        default: dev
+        type: choice
+        options:
+          - dev
+      services:
+        description: Space-separated services to deploy, or all.
+        required: true
+        default: all
+        type: string
+  repository_dispatch:
+    types: [deploy-helm]
+  push:
+    tags:
+      - "*"
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: helm-deploy-${{ github.event.client_payload.environment || github.event.inputs.environment || 'dev' }}
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'us-east-2' }}
+  EKS_CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME || 'petclinic-dev-eks' }}
+  K8S_NAMESPACE: ${{ vars.K8S_NAMESPACE || 'petclinic-dev' }}
+  HELM_CHART_PATH: helm/petclinic-service
+  HELM_ENV_VALUES: helm-values/dev.yaml
+  OPENAI_SECRET_NAME: openai-secret
+  OPENAI_SECRET_KEY: SPRING_AI_OPENAI_API_KEY
+  DEFAULT_SERVICES: >-
+    config-server
+    discovery-server
+    customers-service
+    vets-service
+    visits-service
+    genai-service
+    admin-server
+    api-gateway
+
+jobs:
+  deploy:
+    name: Deploy Helm releases
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.client_payload.environment || github.event.inputs.environment || 'dev' }}
+
+    steps:
+      - name: Checkout platform repo
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --region "${AWS_REGION}" --name "${EKS_CLUSTER_NAME}"
+
+      - name: Sync OpenAI API key
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${OPENAI_API_KEY}" ]; then
+            echo "OPENAI_API_KEY GitHub secret is required for Helm deployment." >&2
+            exit 1
+          fi
+
+          kubectl create namespace "${K8S_NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
+          kubectl -n "${K8S_NAMESPACE}" create secret generic "${OPENAI_SECRET_NAME}" \
+            --from-literal="${OPENAI_SECRET_KEY}=${OPENAI_API_KEY}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Deploy services with Helm
+        env:
+          DISPATCH_SERVICES: ${{ github.event.client_payload.services || '' }}
+          INPUT_SERVICES: ${{ github.event.inputs.services || '' }}
+        run: |
+          set -euo pipefail
+
+          SERVICES="${INPUT_SERVICES}"
+          if [ -z "${SERVICES}" ] || [ "${SERVICES}" = "all" ]; then
+            SERVICES="${DISPATCH_SERVICES}"
+          fi
+          if [ -z "${SERVICES}" ] || [ "${SERVICES}" = "all" ]; then
+            SERVICES="${DEFAULT_SERVICES}"
+          fi
+
+          echo "Deploying services: ${SERVICES}"
+
+          for SERVICE in ${SERVICES}; do
+            VALUES_FILE="helm-values/${SERVICE}.yaml"
+
+            if [ ! -f "${VALUES_FILE}" ]; then
+              echo "Missing values file: ${VALUES_FILE}" >&2
+              exit 1
+            fi
+
+            helm upgrade --install "${SERVICE}" "${HELM_CHART_PATH}" \
+              --namespace "${K8S_NAMESPACE}" \
+              --create-namespace \
+              --values "${HELM_ENV_VALUES}" \
+              --values "${VALUES_FILE}" \
+              --atomic \
+              --wait \
+              --timeout 10m
+          done
