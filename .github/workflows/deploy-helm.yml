@@ -64,6 +64,11 @@ jobs:
         with:
           version: v3.15.4
 
+      - name: Install jq
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -166,26 +171,63 @@ jobs:
             echo "  ${VALUES_FILE}"
             echo "----------------------------------------"
 
+            echo "Rendered image:"
             helm template "${SERVICE}" "${HELM_CHART_PATH}" \
               --namespace "${K8S_NAMESPACE}" \
               --values "${HELM_ENV_VALUES}" \
               --values "${VALUES_FILE}" | grep "image:" || true
+
+            echo "Checking current Helm release status..."
+
+            STATUS="not-found"
+
+            if helm status "${SERVICE}" --namespace "${K8S_NAMESPACE}" >/dev/null 2>&1; then
+              STATUS="$(helm status "${SERVICE}" \
+                --namespace "${K8S_NAMESPACE}" \
+                --output json | jq -r '.info.status')"
+            fi
+
+            echo "Current status for ${SERVICE}: ${STATUS}"
+
+            if [ "${STATUS}" = "failed" ] || \
+               [ "${STATUS}" = "pending-install" ] || \
+               [ "${STATUS}" = "pending-upgrade" ] || \
+               [ "${STATUS}" = "pending-rollback" ] || \
+               [ "${STATUS}" = "uninstalling" ] || \
+               [ "${STATUS}" = "uninstalled" ]; then
+
+              echo "Cleaning broken Helm release: ${SERVICE}"
+
+              helm uninstall "${SERVICE}" \
+                --namespace "${K8S_NAMESPACE}" \
+                --no-hooks || true
+
+              echo "Deleting leftover Helm release secrets for ${SERVICE}, if any..."
+
+              kubectl delete secret \
+                --namespace "${K8S_NAMESPACE}" \
+                -l "owner=helm,name=${SERVICE}" || true
+            fi
+
+            echo "Installing/upgrading ${SERVICE}..."
 
             helm upgrade --install "${SERVICE}" "${HELM_CHART_PATH}" \
               --namespace "${K8S_NAMESPACE}" \
               --create-namespace \
               --values "${HELM_ENV_VALUES}" \
               --values "${VALUES_FILE}" \
-              --atomic \
+              --rollback-on-failure \
               --wait \
-              --timeout 10m
+              --timeout 15m
+
+            echo "${SERVICE} deployed successfully."
           done
 
       - name: Show final deployment status
         if: always()
         run: |
           echo "Helm releases:"
-          helm list -n "${K8S_NAMESPACE}" || true
+          helm list -n "${K8S_NAMESPACE}" --all || true
 
           echo ""
           echo "Pods:"
