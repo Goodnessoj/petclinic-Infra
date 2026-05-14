@@ -1,0 +1,29 @@
+secretStoreName: aws-secrets-manager
+secretStoreKind: ClusterSecretStore
+refreshInterval: 1h
+
+database:
+  enabled: true
+  externalSecretName: petclinic-db-secret
+  targetSecretName: mysql-secret
+  creationPolicy: Owner
+  remoteSecretName: petclinic/dev/terraform/database
+  data:
+    - secretKey: MYSQL_PASSWORD
+      property: MYSQL_PASSWORD
+    - secretKey: MYSQL_USER
+      property: MYSQL_USER
+    - secretKey: MYSQL_HOST
+      property: MYSQL_HOST
+    - secretKey: MYSQL_DATABASE
+      property: MYSQL_DATABASE
+
+openai:
+  enabled: true
+  externalSecretName: petclinic-openai-secret
+  targetSecretName: openai-secret
+  creationPolicy: Owner
+  remoteSecretName: petclinic/dev/terraform/openai-api-key
+  data:
+    - secretKey: SPRING_AI_OPENAI_API_KEY
+      property: OPENAI_API_KEY
