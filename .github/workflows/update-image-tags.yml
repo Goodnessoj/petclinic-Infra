@@ -29,16 +29,21 @@ jobs:
         run: |
           IMAGE_TAG="${{ github.event.client_payload.sha }}"
           SERVICES="${{ github.event.client_payload.services }}"
+          ECR_REGISTRY="974263620909.dkr.ecr.us-east-2.amazonaws.com"
 
           echo "Image Tag: ${IMAGE_TAG}"
           echo "Services: ${SERVICES}"
 
           for SERVICE in ${SERVICES}; do
-            VALUES_FILE="helm-values/${SERVICE}/dev.yaml"
+            VALUES_FILE="helm-values/${SERVICE}.yaml"
 
             if [ -f "${VALUES_FILE}" ]; then
+              echo "Updating ${VALUES_FILE}"
+
+              sed -i "s|registry: .*|registry: ${ECR_REGISTRY}|" "${VALUES_FILE}"
               sed -i "s|repository: .*|repository: petclinic-dev-${SERVICE}|" "${VALUES_FILE}"
               sed -i "s|tag: .*|tag: \"${IMAGE_TAG}\"|" "${VALUES_FILE}"
+
               echo "Updated ${VALUES_FILE}"
             else
               echo "Warning: ${VALUES_FILE} not found, skipping"

@@ -5,18 +5,10 @@ data "aws_partition" "current" {}
 locals {
   repository_prefix = trimsuffix(var.repository_prefix, "-")
 
-  github_subjects = distinct(flatten([
-    for repo in var.github_repositories : concat(
-      [
-        for branch in repo.branches :
-        "repo:${repo.owner}/${repo.name}:ref:refs/heads/${branch}"
-      ],
-      [
-        for environment in repo.environments :
-        "repo:${repo.owner}/${repo.name}:environment:${environment}"
-      ]
-    )
-  ]))
+  github_subjects = distinct([
+    for repo in var.github_repositories :
+    "repo:${repo.owner}/${repo.name}:*"
+  ])
 
   role_name = coalesce(var.role_name, "${var.name_prefix}-github-actions")
 }

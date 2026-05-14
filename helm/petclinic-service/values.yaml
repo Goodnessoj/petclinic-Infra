@@ -6,9 +6,7 @@ environment: dev
 replicaCount: 1
 
 image:
-  registry: springcommunity
-  repositoryPrefix: spring-petclinic
-  name: ""
+  registry: 974263620909.dkr.ecr.us-east-2.amazonaws.com
   repository: ""
   tag: ""
   pullPolicy: IfNotPresent
