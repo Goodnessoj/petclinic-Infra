@@ -3,7 +3,7 @@ nameOverride: visits-service
 image:
   registry: 974263620909.dkr.ecr.us-east-2.amazonaws.com
   repository: petclinic-dev-visits-service
-  tag: latest
+  tag: "64a3a3d"
   pullPolicy: IfNotPresent
 
 service:
