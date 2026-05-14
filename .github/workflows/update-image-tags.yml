@@ -1,0 +1,55 @@
+name: Update Image Tags
+
+on:
+  repository_dispatch:
+    types: [app-image-built]
+
+permissions:
+  contents: write
+
+jobs:
+  update-tags:
+    name: Update image tags
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout platform repo
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITOPS_PAT }}
+          ref: main
+
+      - name: Configure Git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Update image tags in helm-values
+        id: update
+        run: |
+          IMAGE_TAG="${{ github.event.client_payload.sha }}"
+          SERVICES="${{ github.event.client_payload.services }}"
+
+          echo "Image Tag: ${IMAGE_TAG}"
+          echo "Services: ${SERVICES}"
+
+          for SERVICE in ${SERVICES}; do
+            VALUES_FILE="helm-values/${SERVICE}/dev.yaml"
+
+            if [ -f "${VALUES_FILE}" ]; then
+              sed -i "s|repository: .*|repository: petclinic-dev-${SERVICE}|" "${VALUES_FILE}"
+              sed -i "s|tag: .*|tag: \"${IMAGE_TAG}\"|" "${VALUES_FILE}"
+              echo "Updated ${VALUES_FILE}"
+            else
+              echo "Warning: ${VALUES_FILE} not found, skipping"
+            fi
+          done
+
+          git add helm-values/
+
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: update image tags to ${IMAGE_TAG}"
+            git push origin main
+          fi

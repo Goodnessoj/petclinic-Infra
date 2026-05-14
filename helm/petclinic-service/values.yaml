@@ -1,0 +1,142 @@
+nameOverride: ""
+fullnameOverride: ""
+
+environment: dev
+
+replicaCount: 1
+
+image:
+  registry: springcommunity
+  repositoryPrefix: spring-petclinic
+  name: ""
+  repository: ""
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+serviceAccount:
+  create: true
+  automount: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+  annotations: {}
+
+env: {}
+secretEnv: []
+configMapEnv: []
+envFrom: []
+
+externalSecret:
+  enabled: false
+  apiVersion: external-secrets.io/v1
+  name: ""
+  annotations: {}
+  labels: {}
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-secrets-manager
+    kind: ClusterSecretStore
+  target:
+    name: ""
+    creationPolicy: Owner
+  data: []
+  dataFrom: []
+
+configMap:
+  enabled: false
+  annotations: {}
+  data: {}
+
+extraInitContainers: []
+extraVolumes: []
+extraVolumeMounts: []
+
+probes:
+  liveness:
+    enabled: true
+    spec:
+      tcpSocket:
+        port: http
+      initialDelaySeconds: 60
+      periodSeconds: 20
+      timeoutSeconds: 5
+      failureThreshold: 6
+  readiness:
+    enabled: true
+    spec:
+      tcpSocket:
+        port: http
+      initialDelaySeconds: 30
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 6
+  startup:
+    enabled: false
+    spec:
+      tcpSocket:
+        port: http
+      periodSeconds: 10
+      failureThreshold: 30
+
+resources: {}
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: null
+
+pdb:
+  enabled: false
+  minAvailable: 1
+
+monitoring:
+  podMonitor:
+    enabled: false
+    namespace: ""
+    labels: {}
+    interval: 30s
+    scrapeTimeout: 10s
+    path: /actuator/prometheus
+    scheme: http
+
+ingress:
+  enabled: false
+  className: alb
+  host: ""
+  path: /
+  pathType: Prefix
+  annotations: {}
+  albName: ""
+  certificateArn: ""
+  scheme: internet-facing
+  targetType: ip
+  listenPorts:
+    - HTTP: 80
+    - HTTPS: 443
+  sslRedirect: "443"
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

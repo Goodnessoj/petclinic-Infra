@@ -15,5 +15,5 @@ output "eks_cluster_security_group_id" {
 
 output "microservices_security_group_id" {
   description = "Microservices security group ID"
-  value       = aws_security_group.microservices.id
+  value       = aws_security_group.alb.id
 }

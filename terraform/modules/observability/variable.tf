@@ -8,6 +8,11 @@ variable "environment" {
   type        = string
 }
 
+variable "aws_region" {
+  description = "AWS region used in CloudWatch dashboard widgets."
+  type        = string
+}
+
 variable "enable_container_insights" {
   description = "Whether to enable container insights integrations."
   type        = bool

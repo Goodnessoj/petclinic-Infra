@@ -4,11 +4,13 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
   enable_dns_hostnames = true
 
-  tags = {
+  tags = merge({
     Name        = "petclinic-${var.environment}-vpc"
     Environment = var.environment
     Project     = "petclinic"
-  }
+    }, var.cluster_name != "" ? {
+    "kubernetes.io/cluster/${var.cluster_name}" = "shared"
+  } : {})
 }
 
 # Internet Gateway
@@ -30,12 +32,14 @@ resource "aws_subnet" "public" {
   availability_zone       = var.availability_zones[count.index]
   map_public_ip_on_launch = true
 
-  tags = {
-    Name        = "petclinic-${var.environment}-public-${var.availability_zones[count.index]}"
-    Environment = var.environment
-    Project     = "petclinic"
+  tags = merge({
+    Name                     = "petclinic-${var.environment}-public-${var.availability_zones[count.index]}"
+    Environment              = var.environment
+    Project                  = "petclinic"
     "kubernetes.io/role/elb" = "1"
-  }
+    }, var.cluster_name != "" ? {
+    "kubernetes.io/cluster/${var.cluster_name}" = "shared"
+  } : {})
 }
 
 # Route Table
@@ -64,7 +68,7 @@ resource "aws_route_table_association" "public" {
 # EKS Cluster Security Group
 resource "aws_security_group" "eks_cluster" {
   name        = "petclinic-${var.environment}-eks-cluster-sg"
-  description = "Security group for EKS cluster"
+  description = "Security group for the EKS control plane"
   vpc_id      = aws_vpc.main.id
 
   egress {
@@ -81,10 +85,10 @@ resource "aws_security_group" "eks_cluster" {
   }
 }
 
-# Microservices Security Group
-resource "aws_security_group" "microservices" {
-  name        = "petclinic-${var.environment}-microservices-sg"
-  description = "Security group for microservices"
+# Application Load Balancer / microservices Security Group
+resource "aws_security_group" "alb" {
+  name        = "petclinic-${var.environment}-alb-sg"
+  description = "Security group for the application load balancer"
   vpc_id      = aws_vpc.main.id
 
   # HTTP
@@ -148,7 +152,7 @@ resource "aws_security_group" "microservices" {
   }
 
   tags = {
-    Name        = "petclinic-${var.environment}-microservices-sg"
+    Name        = "petclinic-${var.environment}-alb-sg"
     Environment = var.environment
     Project     = "petclinic"
   }

@@ -1,0 +1,74 @@
+nameOverride: customers-service
+
+image:
+  name: customers-service
+
+service:
+  port: 8081
+  targetPort: 8081
+
+secretEnv:
+  - name: MYSQL_HOST
+    secretName: customers-service-db-secret
+    secretKey: MYSQL_HOST
+  - name: MYSQL_USER
+    secretName: customers-service-db-secret
+    secretKey: MYSQL_USER
+  - name: MYSQL_PASSWORD
+    secretName: customers-service-db-secret
+    secretKey: MYSQL_PASSWORD
+  - name: MYSQL_DATABASE
+    secretName: customers-service-db-secret
+    secretKey: MYSQL_DATABASE
+
+externalSecret:
+  enabled: true
+  target:
+    name: customers-service-db-secret
+  data:
+    - secretKey: MYSQL_HOST
+      remoteRef:
+        key: petclinic/dev/terraform/database
+        property: MYSQL_HOST
+    - secretKey: MYSQL_USER
+      remoteRef:
+        key: petclinic/dev/terraform/database
+        property: MYSQL_USER
+    - secretKey: MYSQL_PASSWORD
+      remoteRef:
+        key: petclinic/dev/terraform/database
+        property: MYSQL_PASSWORD
+    - secretKey: MYSQL_DATABASE
+      remoteRef:
+        key: petclinic/dev/terraform/database
+        property: MYSQL_DATABASE
+
+env:
+  SPRING_PROFILES_ACTIVE: docker,mysql
+  CONFIG_SERVER_URL: http://config-server:8888/
+  EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
+  SPRING_DATASOURCE_URL: jdbc:mysql://$(MYSQL_HOST):3306/$(MYSQL_DATABASE)?allowPublicKeyRetrieval=true&useSSL=false
+  SPRING_DATASOURCE_USERNAME: $(MYSQL_USER)
+  SPRING_DATASOURCE_PASSWORD: $(MYSQL_PASSWORD)
+
+extraInitContainers:
+  - name: wait-for-config-server
+    image: busybox:1.36
+    command:
+      - sh
+      - -c
+      - |
+        until wget -q -T 2 -O- http://config-server:8888 >/dev/null 2>&1; do
+          echo "waiting for config-server"
+          sleep 5
+        done
+
+autoscaling:
+  enabled: true
+
+pdb:
+  enabled: true
+
+monitoring:
+  podMonitor:
+    enabled: true

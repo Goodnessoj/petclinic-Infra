@@ -8,10 +8,10 @@ output "repository_urls" {
 
 output "repository_names" {
   description = "List of ECR repository names"
-  value = [for repo in aws_ecr_repository.service : repo.name]
+  value       = [for repo in aws_ecr_repository.service : repo.name]
 }
 
 output "registry_url" {
   description = "ECR registry URL (without service name)"
-  value = "${aws_ecr_repository.service["config-server"].registry_id}.dkr.ecr.us-east-2.amazonaws.com"
+  value       = split("/", aws_ecr_repository.service["config-server"].repository_url)[0]
 }

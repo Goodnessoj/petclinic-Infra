@@ -1,0 +1,28 @@
+nameOverride: discovery-server
+
+image:
+  name: discovery-server
+
+service:
+  port: 8761
+  targetPort: 8761
+
+env:
+  SPRING_PROFILES_ACTIVE: docker
+  CONFIG_SERVER_URL: http://config-server:8888/
+  EUREKA_INSTANCE_HOSTNAME: discovery-server
+
+extraInitContainers:
+  - name: wait-for-config-server
+    image: busybox:1.36
+    command:
+      - sh
+      - -c
+      - |
+        until wget -q -T 2 -O- http://config-server:8888 >/dev/null 2>&1; do
+          echo "waiting for config-server"
+          sleep 5
+        done
+
+pdb:
+  enabled: true

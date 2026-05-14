@@ -57,7 +57,7 @@ resource "aws_cloudwatch_dashboard" "main" {
           ]
           view    = "timeSeries"
           stacked = false
-          region  = "us-east-2"
+          region  = var.aws_region
           title   = "EKS Cluster Status"
           period  = 300
         }
@@ -74,7 +74,7 @@ resource "aws_cloudwatch_dashboard" "main" {
           ]
           view    = "timeSeries"
           stacked = false
-          region  = "us-east-2"
+          region  = var.aws_region
           title   = "RDS Connections"
           period  = 300
         }

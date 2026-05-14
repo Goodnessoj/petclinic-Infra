@@ -1,0 +1,37 @@
+environment: prod
+replicaCount: 2
+
+image:
+  registry: ""
+  repositoryPrefix: petclinic-prod
+  tag: ""
+  pullPolicy: IfNotPresent
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi
+
+autoscaling:
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 65
+  targetMemoryUtilizationPercentage: 80
+
+pdb:
+  minAvailable: 1
+
+monitoring:
+  podMonitor:
+    labels:
+      release: monitoring
+
+ingress:
+  scheme: internet-facing
+  targetType: ip
+  host: ""
+  certificateArn: ""
+  albName: ""
