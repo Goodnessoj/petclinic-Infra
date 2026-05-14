@@ -1,7 +1,10 @@
 nameOverride: api-gateway
 
 image:
-  name: api-gateway
+  registry: 974263620909.dkr.ecr.us-east-2.amazonaws.com
+  repository: petclinic-dev-api-gateway
+  tag: latest
+  pullPolicy: IfNotPresent
 
 service:
   port: 80
@@ -24,18 +27,5 @@ extraInitContainers:
           sleep 5
         done
 
-autoscaling:
-  enabled: true
-
 pdb:
   enabled: true
-
-monitoring:
-  podMonitor:
-    enabled: true
-
-ingress:
-  enabled: false
-  host: ""
-  certificateArn: ""
-  albName: ""

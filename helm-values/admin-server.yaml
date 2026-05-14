@@ -1,7 +1,10 @@
 nameOverride: admin-server
 
 image:
-  name: admin-server
+  registry: 974263620909.dkr.ecr.us-east-2.amazonaws.com
+  repository: petclinic-dev-admin-server
+  tag: latest
+  pullPolicy: IfNotPresent
 
 service:
   port: 9090

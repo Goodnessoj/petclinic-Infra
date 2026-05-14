@@ -1,26 +1,14 @@
 nameOverride: genai-service
 
 image:
-  name: genai-service
+  registry: 974263620909.dkr.ecr.us-east-2.amazonaws.com
+  repository: petclinic-dev-genai-service
+  tag: latest
+  pullPolicy: IfNotPresent
 
 service:
   port: 8084
   targetPort: 8084
-
-secretEnv:
-  - name: SPRING_AI_OPENAI_API_KEY
-    secretName: genai-service-openai-secret
-    secretKey: SPRING_AI_OPENAI_API_KEY
-
-externalSecret:
-  enabled: true
-  target:
-    name: genai-service-openai-secret
-  data:
-    - secretKey: SPRING_AI_OPENAI_API_KEY
-      remoteRef:
-        key: petclinic/dev/terraform/openai-api-key
-        property: OPENAI_API_KEY
 
 env:
   SPRING_PROFILES_ACTIVE: docker
@@ -39,12 +27,5 @@ extraInitContainers:
           sleep 5
         done
 
-autoscaling:
-  enabled: true
-
 pdb:
   enabled: true
-
-monitoring:
-  podMonitor:
-    enabled: true
