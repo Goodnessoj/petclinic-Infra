@@ -32,8 +32,8 @@ variable "github_repositories" {
   }))
   default = [
     {
-      owner        = "Goodnessoj"
-      name         = "petclinic-Infra"
+      owner        = "official-mary"
+      name         = "spring-petclinic-microservices"
       branches     = ["main"]
       environments = []
     }
