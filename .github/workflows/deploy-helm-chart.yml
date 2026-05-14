@@ -385,14 +385,27 @@ jobs:
           set -euo pipefail
 
           for _ in $(seq 1 40); do
-            if kubectl get secret openai-secret --namespace "$APP_NAMESPACE" >/dev/null 2>&1; then
+            if ! kubectl get secret openai-secret --namespace "$APP_NAMESPACE" >/dev/null 2>&1; then
+              sleep 5
+              continue
+            fi
+
+            KEY_B64="$(kubectl get secret openai-secret \
+              --namespace "$APP_NAMESPACE" \
+              -o jsonpath='{.data.SPRING_AI_OPENAI_API_KEY}')"
+            KEY_LENGTH="$(printf '%s' "$KEY_B64" | base64 -d | wc -c | xargs)"
+
+            if [ "$KEY_LENGTH" -gt 0 ]; then
+              echo "openai-secret exists and contains a non-empty SPRING_AI_OPENAI_API_KEY."
               exit 0
             fi
+
+            echo "openai-secret exists, but SPRING_AI_OPENAI_API_KEY is empty. Waiting for External Secrets refresh..."
             sleep 5
           done
 
           kubectl get externalsecret petclinic-openai-secret --namespace "$APP_NAMESPACE" -o yaml || true
-          echo "openai-secret was not created by External Secrets within the timeout window." >&2
+          echo "openai-secret was not created with a non-empty SPRING_AI_OPENAI_API_KEY within the timeout window." >&2
           exit 1
 
       - name: Deploy service Helm release

@@ -330,11 +330,21 @@ jobs:
           fi
 
           for _ in $(seq 1 40); do
-            if kubectl get secret openai-secret --namespace "$APP_NAMESPACE" >/dev/null 2>&1; then
-              echo "openai-secret exists."
+            if ! kubectl get secret openai-secret --namespace "$APP_NAMESPACE" >/dev/null 2>&1; then
+              sleep 5
+              continue
+            fi
+
+            KEY_LENGTH="$(kubectl get secret openai-secret \
+              --namespace "$APP_NAMESPACE" \
+              -o json | jq -r '.data.SPRING_AI_OPENAI_API_KEY // "" | @base64d | length')"
+
+            if [ "$KEY_LENGTH" -gt 0 ]; then
+              echo "openai-secret exists and contains a non-empty SPRING_AI_OPENAI_API_KEY."
               exit 0
             fi
 
+            echo "openai-secret exists, but SPRING_AI_OPENAI_API_KEY is empty. Waiting for External Secrets refresh..."
             sleep 5
           done
 
@@ -342,7 +352,7 @@ jobs:
             --namespace "$APP_NAMESPACE" \
             -o yaml || true
 
-          echo "openai-secret was not created by External Secrets within the timeout window." >&2
+          echo "openai-secret was not created with a non-empty SPRING_AI_OPENAI_API_KEY within the timeout window." >&2
           exit 1
 
       - name: Deploy changed services with Helm
