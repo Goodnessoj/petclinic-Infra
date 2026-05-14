@@ -216,7 +216,7 @@ jobs:
               --create-namespace \
               --values "${HELM_ENV_VALUES}" \
               --values "${VALUES_FILE}" \
-              --rollback-on-failure \
+              --cleanup-on-fail \
               --wait \
               --timeout 15m
 
