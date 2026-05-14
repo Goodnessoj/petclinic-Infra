@@ -78,6 +78,11 @@ jobs:
           role-session-name: gha-service-helm-${{ github.run_id }}
           unset-current-credentials: true
 
+      - name: Confirm AWS identity
+        shell: bash
+        run: |
+          aws sts get-caller-identity
+
       - name: Resolve deploy context
         id: context
         shell: bash
@@ -230,6 +235,15 @@ jobs:
           aws eks update-kubeconfig \
             --name "$CLUSTER_NAME" \
             --region "$AWS_REGION"
+
+          kubectl config current-context
+
+      - name: Verify Kubernetes authentication
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          kubectl auth can-i get namespaces
 
       - name: Validate cluster prerequisites
         shell: bash
