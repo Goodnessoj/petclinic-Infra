@@ -3,7 +3,7 @@ nameOverride: api-gateway
 image:
   registry: 974263620909.dkr.ecr.us-east-2.amazonaws.com
   repository: petclinic-dev-api-gateway
-  tag: "fb9f481"
+  tag: "a9352bb"
   pullPolicy: IfNotPresent
 
 service:
