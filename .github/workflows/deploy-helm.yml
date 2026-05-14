@@ -15,8 +15,10 @@ on:
         required: true
         default: all
         type: string
+
   repository_dispatch:
     types: [deploy-helm]
+
   push:
     tags:
       - "*"
@@ -44,8 +46,8 @@ env:
     vets-service
     visits-service
     genai-service
-    admin-server
     api-gateway
+    admin-server
 
 jobs:
   deploy:
@@ -59,6 +61,8 @@ jobs:
 
       - name: Set up Helm
         uses: azure/setup-helm@v4
+        with:
+          version: v3.15.4
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -66,26 +70,23 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Update kubeconfig
-        run: aws eks update-kubeconfig --region "${AWS_REGION}" --name "${EKS_CLUSTER_NAME}"
-
-      - name: Sync OpenAI API key
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      - name: Confirm AWS identity
         run: |
-          set -euo pipefail
+          aws sts get-caller-identity
 
-          if [ -z "${OPENAI_API_KEY}" ]; then
-            echo "OPENAI_API_KEY GitHub secret is required for Helm deployment." >&2
-            exit 1
-          fi
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig \
+            --region "${AWS_REGION}" \
+            --name "${EKS_CLUSTER_NAME}"
 
-          kubectl create namespace "${K8S_NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
-          kubectl -n "${K8S_NAMESPACE}" create secret generic "${OPENAI_SECRET_NAME}" \
-            --from-literal="${OPENAI_SECRET_KEY}=${OPENAI_API_KEY}" \
-            --dry-run=client -o yaml | kubectl apply -f -
+      - name: Confirm Kubernetes access
+        run: |
+          kubectl get nodes
+          kubectl get namespace "${K8S_NAMESPACE}" || true
 
-      - name: Deploy services with Helm
+      - name: Resolve services
+        id: services
         env:
           DISPATCH_SERVICES: ${{ github.event.client_payload.services || '' }}
           INPUT_SERVICES: ${{ github.event.inputs.services || '' }}
@@ -93,12 +94,60 @@ jobs:
           set -euo pipefail
 
           SERVICES="${INPUT_SERVICES}"
+
           if [ -z "${SERVICES}" ] || [ "${SERVICES}" = "all" ]; then
             SERVICES="${DISPATCH_SERVICES}"
           fi
+
           if [ -z "${SERVICES}" ] || [ "${SERVICES}" = "all" ]; then
             SERVICES="${DEFAULT_SERVICES}"
           fi
+
+          echo "Resolved services: ${SERVICES}"
+          echo "services=${SERVICES}" >> "$GITHUB_OUTPUT"
+
+      - name: Create namespace
+        run: |
+          kubectl create namespace "${K8S_NAMESPACE}" \
+            --dry-run=client \
+            -o yaml | kubectl apply -f -
+
+      - name: Sync OpenAI API key if needed
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SERVICES: ${{ steps.services.outputs.services }}
+        run: |
+          set -euo pipefail
+
+          NEED_OPENAI="false"
+
+          for SERVICE in ${SERVICES}; do
+            if [ "${SERVICE}" = "genai-service" ]; then
+              NEED_OPENAI="true"
+            fi
+          done
+
+          if [ "${NEED_OPENAI}" = "true" ]; then
+            if [ -z "${OPENAI_API_KEY}" ]; then
+              echo "OPENAI_API_KEY GitHub secret is required because genai-service is being deployed." >&2
+              exit 1
+            fi
+
+            kubectl -n "${K8S_NAMESPACE}" create secret generic "${OPENAI_SECRET_NAME}" \
+              --from-literal="${OPENAI_SECRET_KEY}=${OPENAI_API_KEY}" \
+              --dry-run=client \
+              -o yaml | kubectl apply -f -
+
+            echo "OpenAI secret synced."
+          else
+            echo "genai-service is not being deployed. Skipping OpenAI secret sync."
+          fi
+
+      - name: Deploy services with Helm
+        env:
+          SERVICES: ${{ steps.services.outputs.services }}
+        run: |
+          set -euo pipefail
 
           echo "Deploying services: ${SERVICES}"
 
@@ -110,6 +159,18 @@ jobs:
               exit 1
             fi
 
+            echo "----------------------------------------"
+            echo "Deploying ${SERVICE}"
+            echo "Using values:"
+            echo "  ${HELM_ENV_VALUES}"
+            echo "  ${VALUES_FILE}"
+            echo "----------------------------------------"
+
+            helm template "${SERVICE}" "${HELM_CHART_PATH}" \
+              --namespace "${K8S_NAMESPACE}" \
+              --values "${HELM_ENV_VALUES}" \
+              --values "${VALUES_FILE}" | grep "image:" || true
+
             helm upgrade --install "${SERVICE}" "${HELM_CHART_PATH}" \
               --namespace "${K8S_NAMESPACE}" \
               --create-namespace \
@@ -119,3 +180,21 @@ jobs:
               --wait \
               --timeout 10m
           done
+
+      - name: Show final deployment status
+        if: always()
+        run: |
+          echo "Helm releases:"
+          helm list -n "${K8S_NAMESPACE}" || true
+
+          echo ""
+          echo "Pods:"
+          kubectl get pods -n "${K8S_NAMESPACE}" -o wide || true
+
+          echo ""
+          echo "Services:"
+          kubectl get svc -n "${K8S_NAMESPACE}" || true
+
+          echo ""
+          echo "Ingress:"
+          kubectl get ingress -n "${K8S_NAMESPACE}" || true
