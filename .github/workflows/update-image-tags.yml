@@ -1,25 +1,64 @@
 name: Update Image Tags
 
 on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment whose image tags should be updated."
+        required: false
+        default: dev
+        type: choice
+        options:
+          - dev
+          - prod
+      image_tag:
+        description: "Image tag to write into changed service values."
+        required: true
+        type: string
+      services:
+        description: "Space- or comma-separated services to update, or all."
+        required: true
+        type: string
+      image_repository_prefix:
+        description: "Optional ECR repository prefix."
+        required: false
+        type: string
+
   repository_dispatch:
-    types: [app-image-built]
+    types:
+      - app-image-built
 
 permissions:
   contents: write
 
+env:
+  DEFAULT_ENVIRONMENT: dev
+  DEFAULT_ECR_REGISTRY: ${{ vars.ECR_REGISTRY_URL || '974263620909.dkr.ecr.us-east-2.amazonaws.com' }}
+  DEFAULT_IMAGE_REPOSITORY_PREFIX: ${{ vars.ECR_REPOSITORY_PREFIX || '' }}
+  KNOWN_SERVICES: >-
+    admin-server
+    api-gateway
+    config-server
+    customers-service
+    discovery-server
+    genai-service
+    vets-service
+    visits-service
+
 jobs:
   update-tags:
-    name: Update image tags
+    name: Update image tags and dispatch deploy
     runs-on: ubuntu-latest
 
     outputs:
-      changed: ${{ steps.commit.outputs.changed }}
+      changed: ${{ steps.update.outputs.changed }}
+      changed_services: ${{ steps.update.outputs.changed_services }}
 
     steps:
       - name: Checkout platform repo
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITOPS_PAT }}
+          token: ${{ secrets.GITOPS_PAT || github.token }}
           ref: main
 
       - name: Configure Git identity
@@ -27,76 +66,231 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+      - name: Resolve update context
+        id: context
+        uses: actions/github-script@v7
+        env:
+          INPUT_ENVIRONMENT: ${{ inputs.environment || '' }}
+          INPUT_IMAGE_TAG: ${{ inputs.image_tag || '' }}
+          INPUT_SERVICES: ${{ inputs.services || '' }}
+          INPUT_IMAGE_REPOSITORY_PREFIX: ${{ inputs.image_repository_prefix || '' }}
+        with:
+          script: |
+            const knownServices = process.env.KNOWN_SERVICES.trim().split(/\s+/);
+            const payload = context.payload.client_payload || {};
+
+            function parseServices(value) {
+              if (Array.isArray(value)) {
+                return value;
+              }
+
+              if (value === undefined || value === null) {
+                return [];
+              }
+
+              const raw = String(value).trim();
+
+              if (!raw) {
+                return [];
+              }
+
+              if (raw === 'all') {
+                return knownServices;
+              }
+
+              if (raw.startsWith('[')) {
+                try {
+                  const parsed = JSON.parse(raw);
+                  if (Array.isArray(parsed)) {
+                    return parsed;
+                  }
+                } catch (error) {
+                  core.warning(`Could not parse services JSON array: ${error.message}`);
+                }
+              }
+
+              return raw.split(/[\s,]+/);
+            }
+
+            const imageTag = (
+              payload.image_tag ||
+              payload.sha ||
+              payload.source_sha ||
+              process.env.INPUT_IMAGE_TAG ||
+              ''
+            ).trim();
+
+            const environment = (
+              payload.environment ||
+              process.env.INPUT_ENVIRONMENT ||
+              process.env.DEFAULT_ENVIRONMENT ||
+              'dev'
+            ).trim();
+
+            const rawServices = (
+              payload.services ??
+              payload.changed_services ??
+              payload.service ??
+              process.env.INPUT_SERVICES
+            );
+
+            const services = [...new Set(parseServices(rawServices).map((service) => String(service).trim()).filter(Boolean))];
+            const unknownServices = services.filter((service) => !knownServices.includes(service));
+
+            if (!imageTag) {
+              core.setFailed('No image tag was provided. Send client_payload.image_tag, client_payload.sha, or workflow_dispatch image_tag.');
+              return;
+            }
+
+            if (services.length === 0) {
+              core.setFailed('No services were provided. Send client_payload.services or workflow_dispatch services.');
+              return;
+            }
+
+            if (unknownServices.length > 0) {
+              core.setFailed(`Unsupported service(s): ${unknownServices.join(', ')}`);
+              return;
+            }
+
+            const repositoryPrefix = (
+              payload.image_repository_prefix ||
+              process.env.INPUT_IMAGE_REPOSITORY_PREFIX ||
+              process.env.DEFAULT_IMAGE_REPOSITORY_PREFIX ||
+              `petclinic-${environment}`
+            ).trim().replace(/-$/, '');
+
+            const imageRegistry = (
+              payload.image_registry ||
+              process.env.DEFAULT_ECR_REGISTRY ||
+              ''
+            ).trim();
+
+            if (!repositoryPrefix) {
+              core.setFailed('No image repository prefix resolved.');
+              return;
+            }
+
+            if (!imageRegistry) {
+              core.setFailed('No ECR registry resolved.');
+              return;
+            }
+
+            core.setOutput('environment', environment);
+            core.setOutput('image_tag', imageTag);
+            core.setOutput('services', services.join(' '));
+            core.setOutput('image_registry', imageRegistry);
+            core.setOutput('image_repository_prefix', repositoryPrefix);
+            const sourceRepository = (
+              payload.source_repository ||
+              (typeof payload.repository === 'string' ? payload.repository : '') ||
+              ''
+            );
+
+            core.setOutput('source_repository', sourceRepository);
+            core.setOutput('source_sha', payload.source_sha || payload.sha || imageTag);
+
+            core.info(`Image tag: ${imageTag}`);
+            core.info(`Services requested: ${services.join(' ')}`);
+            core.info(`Repository prefix: ${repositoryPrefix}`);
+
       - name: Update image tags in helm-values
+        id: update
+        env:
+          IMAGE_TAG: ${{ steps.context.outputs.image_tag }}
+          SERVICES: ${{ steps.context.outputs.services }}
+          ECR_REGISTRY: ${{ steps.context.outputs.image_registry }}
+          IMAGE_REPOSITORY_PREFIX: ${{ steps.context.outputs.image_repository_prefix }}
         run: |
           set -euo pipefail
 
-          IMAGE_TAG="${{ github.event.client_payload.sha }}"
-          SERVICES="${{ github.event.client_payload.services }}"
-          ECR_REGISTRY="974263620909.dkr.ecr.us-east-2.amazonaws.com"
+          CHANGED_SERVICES=()
 
-          echo "Image Tag: ${IMAGE_TAG}"
-          echo "Services: ${SERVICES}"
+          echo "Image tag: $IMAGE_TAG"
+          echo "Requested services: $SERVICES"
 
-          if [ -z "${IMAGE_TAG}" ]; then
-            echo "IMAGE_TAG is empty"
-            exit 1
-          fi
-
-          if [ -z "${SERVICES}" ]; then
-            echo "SERVICES is empty"
-            exit 1
-          fi
-
-          for SERVICE in ${SERVICES}; do
+          for SERVICE in $SERVICES; do
             VALUES_FILE="helm-values/${SERVICE}.yaml"
 
-            if [ -f "${VALUES_FILE}" ]; then
-              echo "Updating ${VALUES_FILE}"
+            if [ ! -f "$VALUES_FILE" ]; then
+              echo "Missing values file: $VALUES_FILE" >&2
+              exit 1
+            fi
 
-              sed -i "s|^[[:space:]]*registry: .*|  registry: ${ECR_REGISTRY}|" "${VALUES_FILE}"
-              sed -i "s|^[[:space:]]*repository: .*|  repository: petclinic-dev-${SERVICE}|" "${VALUES_FILE}"
-              sed -i "s|^[[:space:]]*tag: .*|  tag: \"${IMAGE_TAG}\"|" "${VALUES_FILE}"
+            echo "Updating $VALUES_FILE"
 
-              echo "Updated ${VALUES_FILE}"
+            sed -i "s|^[[:space:]]*registry: .*|  registry: ${ECR_REGISTRY}|" "$VALUES_FILE"
+            sed -i "s|^[[:space:]]*repository: .*|  repository: ${IMAGE_REPOSITORY_PREFIX}-${SERVICE}|" "$VALUES_FILE"
+            sed -i "s|^[[:space:]]*tag: .*|  tag: \"${IMAGE_TAG}\"|" "$VALUES_FILE"
+
+            if git diff --quiet -- "$VALUES_FILE"; then
+              echo "$VALUES_FILE already matched the requested image."
             else
-              echo "Warning: ${VALUES_FILE} not found, skipping"
+              CHANGED_SERVICES+=("$SERVICE")
             fi
           done
 
-          echo "Git diff:"
-          git diff
+          CHANGED_SERVICES_TEXT="${CHANGED_SERVICES[*]:-}"
 
-      - name: Commit updated tags
-        id: commit
-        run: |
-          git add helm-values/
-
-          if git diff --staged --quiet; then
-            echo "No changes to commit"
+          if [ -z "$CHANGED_SERVICES_TEXT" ]; then
+            echo "No helm-values files changed."
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
-            git commit -m "chore: update image tags to ${{ github.event.client_payload.sha }}"
-            git push origin main
+            echo "Changed services: $CHANGED_SERVICES_TEXT"
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Trigger Helm deploy
-        if: steps.commit.outputs.changed == 'true'
+          echo "changed_services=$CHANGED_SERVICES_TEXT" >> "$GITHUB_OUTPUT"
+
+          echo "Git diff:"
+          git diff -- helm-values/
+
+      - name: Commit updated tags
+        id: commit
+        if: steps.update.outputs.changed == 'true'
+        env:
+          IMAGE_TAG: ${{ steps.context.outputs.image_tag }}
+          CHANGED_SERVICES: ${{ steps.update.outputs.changed_services }}
+        run: |
+          set -euo pipefail
+
+          git add helm-values/
+          git commit \
+            -m "chore: update image tags to ${IMAGE_TAG}" \
+            -m "Services: ${CHANGED_SERVICES}"
+          git push origin main
+
+          echo "commit_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Trigger changed service deploy
+        if: steps.update.outputs.changed == 'true'
         uses: actions/github-script@v7
         env:
-          IMAGE_TAG: ${{ github.event.client_payload.sha }}
-          SERVICES: ${{ github.event.client_payload.services }}
+          DEPLOY_ENVIRONMENT: ${{ steps.context.outputs.environment }}
+          IMAGE_TAG: ${{ steps.context.outputs.image_tag }}
+          CHANGED_SERVICES: ${{ steps.update.outputs.changed_services }}
+          SOURCE_REPOSITORY: ${{ steps.context.outputs.source_repository }}
+          SOURCE_SHA: ${{ steps.context.outputs.source_sha }}
+          TAG_COMMIT: ${{ steps.commit.outputs.commit_sha }}
         with:
-          github-token: ${{ secrets.GITOPS_PAT }}
+          github-token: ${{ secrets.GITOPS_PAT || github.token }}
           script: |
             await github.rest.repos.createDispatchEvent({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              event_type: 'deploy-helm',
+              event_type: 'deploy-services',
               client_payload: {
-                environment: 'dev',
+                environment: process.env.DEPLOY_ENVIRONMENT,
                 image_tag: process.env.IMAGE_TAG,
-                services: process.env.SERVICES
+                services: process.env.CHANGED_SERVICES,
+                source_repository: process.env.SOURCE_REPOSITORY || `${context.repo.owner}/${context.repo.repo}`,
+                source_sha: process.env.SOURCE_SHA,
+                tag_commit: process.env.TAG_COMMIT
               }
-            })
+            });
+
+            core.info(`Dispatched deploy-services for: ${process.env.CHANGED_SERVICES}`);
+
+      - name: No deploy needed
+        if: steps.update.outputs.changed != 'true'
+        run: |
+          echo "No image tag changes were committed, so no deploy dispatch was sent."
