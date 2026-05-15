@@ -4,6 +4,23 @@ locals {
   application_namespace            = "petclinic-dev"
   load_balancer_namespace          = "kube-system"
   load_balancer_service_account    = "aws-load-balancer-controller"
+
+  platform_ingress_annotations = {
+    "alb.ingress.kubernetes.io/scheme"             = "internet-facing"
+    "alb.ingress.kubernetes.io/target-type"        = "ip"
+    "alb.ingress.kubernetes.io/listen-ports"       = jsonencode([{ HTTP = 80 }, { HTTPS = 443 }])
+    "alb.ingress.kubernetes.io/ssl-redirect"       = "443"
+    "alb.ingress.kubernetes.io/certificate-arn"    = var.platform_certificate_arn
+    "alb.ingress.kubernetes.io/group.name"         = var.platform_alb_group_name
+    "alb.ingress.kubernetes.io/load-balancer-name" = var.platform_alb_name
+  }
+}
+
+data "aws_route53_zone" "platform" {
+  count = var.enable_platform_ingress ? 1 : 0
+
+  name         = var.root_domain_name
+  private_zone = false
 }
 
 resource "kubernetes_namespace_v1" "application" {
@@ -95,31 +112,6 @@ resource "helm_release" "aws_load_balancer_controller" {
   ]
 }
 
-resource "helm_release" "monitoring" {
-  name             = "monitoring"
-  repository       = "https://prometheus-community.github.io/helm-charts"
-  chart            = "kube-prometheus-stack"
-  version          = var.kube_prometheus_stack_chart_version
-  namespace        = "monitoring"
-  create_namespace = true
-
-  values = [
-    yamlencode({
-      grafana = {
-        service = {
-          type = var.grafana_service_type
-        }
-      }
-      prometheus = {
-        prometheusSpec = {
-          podMonitorSelectorNilUsesHelmValues     = false
-          serviceMonitorSelectorNilUsesHelmValues = false
-        }
-      }
-    })
-  ]
-}
-
 resource "helm_release" "argocd" {
   name             = "argocd"
   repository       = "https://argoproj.github.io/argo-helm"
@@ -127,6 +119,80 @@ resource "helm_release" "argocd" {
   version          = var.argocd_chart_version
   namespace        = "argocd"
   create_namespace = true
+
+  values = [
+    yamlencode({
+      configs = {
+        params = {
+          "server.insecure" = true
+        }
+      }
+      redis = {
+        serviceAccount = {
+          name = "argocd-redis"
+        }
+      }
+    })
+  ]
+}
+
+resource "kubernetes_ingress_v1" "argocd" {
+  count = var.enable_platform_ingress ? 1 : 0
+
+  metadata {
+    name      = "argocd"
+    namespace = "argocd"
+
+    labels = {
+      "app.kubernetes.io/name"    = "argocd"
+      "app.kubernetes.io/part-of" = "petclinic-platform"
+    }
+
+    annotations = local.platform_ingress_annotations
+  }
+
+  spec {
+    ingress_class_name = "alb"
+
+    rule {
+      host = var.argocd_hostname
+
+      http {
+        path {
+          path      = "/"
+          path_type = "Prefix"
+
+          backend {
+            service {
+              name = "argocd-server"
+
+              port {
+                number = 80
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  wait_for_load_balancer = true
+
+  depends_on = [
+    helm_release.argocd,
+    helm_release.aws_load_balancer_controller,
+  ]
+}
+
+resource "aws_route53_record" "argocd" {
+  count = var.enable_platform_ingress ? 1 : 0
+
+  allow_overwrite = true
+  zone_id         = data.aws_route53_zone.platform[0].zone_id
+  name            = var.argocd_hostname
+  type            = "CNAME"
+  ttl             = 60
+  records         = [kubernetes_ingress_v1.argocd[0].status[0].load_balancer[0].ingress[0].hostname]
 }
 
 resource "kubernetes_secret_v1" "argocd_repo_credentials" {

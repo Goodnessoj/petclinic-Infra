@@ -125,6 +125,20 @@ data "aws_iam_policy_document" "github_ecr_push" {
 
     resources = ["*"]
   }
+
+  statement {
+    sid    = "UpdateOpenAiRuntimeSecret"
+    effect = "Allow"
+
+    actions = [
+      "secretsmanager:DescribeSecret",
+      "secretsmanager:PutSecretValue"
+    ]
+
+    resources = [
+      "arn:${data.aws_partition.current.partition}:secretsmanager:*:${data.aws_caller_identity.current.account_id}:secret:${var.name_prefix}/*/terraform/openai-api-key-*"
+    ]
+  }
 }
 
 resource "aws_iam_policy" "github_ecr_push" {

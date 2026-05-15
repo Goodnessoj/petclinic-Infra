@@ -1,6 +1,8 @@
 locals {
-  name_prefix  = "${var.project_name}-${var.environment}"
-  cluster_name = "${local.name_prefix}-eks"
+  name_prefix         = "${var.project_name}-${var.environment}"
+  cluster_name        = "${local.name_prefix}-eks"
+  argocd_domain_name  = "${var.argocd_subdomain}.${var.root_domain_name}"
+  grafana_domain_name = "${var.grafana_subdomain}.${var.root_domain_name}"
 
   common_tags = {
     Project     = var.project_name
@@ -146,6 +148,7 @@ module "dns_ingress" {
   environment            = var.environment
   root_domain_name       = var.root_domain_name
   app_subdomain          = var.app_subdomain
+  additional_subdomains  = [var.argocd_subdomain, var.grafana_subdomain]
   aws_region             = var.aws_region
   cluster_name           = module.eks.cluster_name
   cluster_endpoint       = module.eks.cluster_endpoint
@@ -165,6 +168,13 @@ module "addons" {
   external_secrets_role_arn             = module.eks.external_secrets_role_arn
   aws_load_balancer_controller_role_arn = module.eks.lb_controller_role_arn
   grafana_service_type                  = var.grafana_service_type
+  enable_platform_ingress               = var.enable_dns_ingress
+  root_domain_name                      = var.root_domain_name
+  argocd_hostname                       = local.argocd_domain_name
+  grafana_hostname                      = local.grafana_domain_name
+  platform_certificate_arn              = try(module.dns_ingress[0].acm_certificate_arn, "")
+  platform_alb_group_name               = "${local.name_prefix}-platform"
+  platform_alb_name                     = "${local.name_prefix}-platform"
   argocd_repo_url                       = var.argocd_repo_url
   argocd_repo_username                  = var.argocd_repo_username
   argocd_repo_token                     = var.argocd_repo_token

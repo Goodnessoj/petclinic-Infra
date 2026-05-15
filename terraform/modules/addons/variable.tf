@@ -74,6 +74,48 @@ variable "grafana_service_type" {
   }
 }
 
+variable "enable_platform_ingress" {
+  description = "Whether to expose ArgoCD and Grafana through ALB ingresses."
+  type        = bool
+  default     = false
+}
+
+variable "root_domain_name" {
+  description = "Root domain name hosted in Route 53. Required when enable_platform_ingress is true."
+  type        = string
+  default     = ""
+}
+
+variable "argocd_hostname" {
+  description = "External hostname for the ArgoCD UI."
+  type        = string
+  default     = ""
+}
+
+variable "grafana_hostname" {
+  description = "External hostname for the Grafana UI."
+  type        = string
+  default     = ""
+}
+
+variable "platform_certificate_arn" {
+  description = "ACM certificate ARN used by ArgoCD and Grafana ALB ingresses."
+  type        = string
+  default     = ""
+}
+
+variable "platform_alb_group_name" {
+  description = "AWS Load Balancer Controller ingress group name for platform UIs."
+  type        = string
+  default     = "petclinic-platform"
+}
+
+variable "platform_alb_name" {
+  description = "AWS load balancer name for platform UI ingresses."
+  type        = string
+  default     = "petclinic-platform"
+}
+
 variable "argocd_repo_url" {
   description = "Git repository URL Argo CD will read. Used for optional private repo credentials."
   type        = string

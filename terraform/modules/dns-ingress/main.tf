@@ -7,12 +7,16 @@ data "aws_route53_zone" "main" {
 # Build the full app domain name
 locals {
   app_domain_name = "${var.app_subdomain}.${var.root_domain_name}"
+  additional_domain_names = [
+    for subdomain in var.additional_subdomains : "${subdomain}.${var.root_domain_name}"
+  ]
 }
 
 # ACM Certificate for the application subdomain
 resource "aws_acm_certificate" "main" {
-  domain_name       = local.app_domain_name
-  validation_method = "DNS"
+  domain_name               = local.app_domain_name
+  subject_alternative_names = local.additional_domain_names
+  validation_method         = "DNS"
 
   lifecycle {
     create_before_destroy = true
@@ -53,5 +57,5 @@ resource "aws_acm_certificate_validation" "main" {
 
 # Note:
 # The AWS Load Balancer Controller and Kubernetes Ingress are handled separately.
-# After the Ingress creates the ALB, create a Route 53 A alias record for:
-# petclinic.goodnessoj.site -> ALB
+# Platform UI DNS records are created in the addons module after the ingresses
+# receive their ALB hostnames.

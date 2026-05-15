@@ -176,13 +176,25 @@ variable "enable_dns_ingress" {
 variable "root_domain_name" {
   description = "Root domain name hosted in Route 53."
   type        = string
-  default     = "goodnessoj.site"
+  default     = "phoniex.site"
 }
 
 variable "app_subdomain" {
   description = "Application subdomain under the root domain."
   type        = string
   default     = "petclinic"
+}
+
+variable "argocd_subdomain" {
+  description = "ArgoCD UI subdomain under the root domain."
+  type        = string
+  default     = "argocd"
+}
+
+variable "grafana_subdomain" {
+  description = "Grafana UI subdomain under the root domain."
+  type        = string
+  default     = "grafana"
 }
 
 variable "grafana_service_type" {

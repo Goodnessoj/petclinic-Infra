@@ -114,10 +114,14 @@ monitoring:
     enabled: false
     namespace: ""
     labels: {}
-    interval: 30s
+    interval: 15s
     scrapeTimeout: 10s
     path: /actuator/prometheus
     scheme: http
+    podTargetLabels:
+      - app.kubernetes.io/name
+      - app.kubernetes.io/instance
+      - petclinic.io/environment
 
 ingress:
   enabled: false

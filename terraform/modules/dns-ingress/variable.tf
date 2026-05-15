@@ -4,7 +4,7 @@ variable "environment" {
 }
 
 variable "root_domain_name" {
-  description = "Root domain name hosted in Route 53, for example goodnessoj.site"
+  description = "Root domain name hosted in Route 53, for example phoniex.site"
   type        = string
 }
 
@@ -12,6 +12,12 @@ variable "app_subdomain" {
   description = "Subdomain for the application, for example petclinic"
   type        = string
   default     = "petclinic"
+}
+
+variable "additional_subdomains" {
+  description = "Additional subdomains to include on the ACM certificate."
+  type        = list(string)
+  default     = []
 }
 
 variable "aws_region" {

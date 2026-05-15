@@ -13,6 +13,11 @@ output "app_domain_name" {
   value       = local.app_domain_name
 }
 
+output "additional_domain_names" {
+  description = "Additional hostnames covered by the ACM certificate."
+  value       = local.additional_domain_names
+}
+
 output "acm_certificate_arn" {
   description = "Validated ACM certificate ARN"
   value       = aws_acm_certificate_validation.main.certificate_arn

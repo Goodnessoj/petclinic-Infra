@@ -18,6 +18,16 @@ output "argocd_namespace" {
   value       = helm_release.argocd.namespace
 }
 
+output "argocd_hostname" {
+  description = "External ArgoCD hostname."
+  value       = var.enable_platform_ingress ? var.argocd_hostname : null
+}
+
+output "grafana_hostname" {
+  description = "External Grafana hostname."
+  value       = var.enable_platform_ingress ? var.grafana_hostname : null
+}
+
 output "application_namespace" {
   description = "Namespace where the Petclinic application is deployed."
   value       = kubernetes_namespace_v1.application.metadata[0].name

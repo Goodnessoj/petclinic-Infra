@@ -16,6 +16,10 @@ spec:
   selector:
     matchLabels:
       {{- include "petclinic-service.selectorLabels" . | nindent 6 }}
+  {{- with .Values.monitoring.podMonitor.podTargetLabels }}
+  podTargetLabels:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   podMetricsEndpoints:
     - port: http
       path: {{ .Values.monitoring.podMonitor.path }}

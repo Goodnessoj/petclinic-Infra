@@ -245,77 +245,13 @@ resource "aws_iam_role" "lb_controller" {
   tags               = var.tags
 }
 
-data "aws_iam_policy_document" "lb_controller" {
-  statement {
-    effect = "Allow"
-
-    actions = [
-      "iam:CreateServiceLinkedRole"
-    ]
-
-    resources = ["*"]
-
-    condition {
-      test     = "StringEquals"
-      variable = "iam:AWSServiceName"
-      values   = ["elasticloadbalancing.amazonaws.com"]
-    }
-  }
-
-  statement {
-    effect = "Allow"
-
-    actions = [
-      "acm:DescribeCertificate",
-      "acm:GetCertificate",
-      "acm:ListCertificates",
-      "cognito-idp:DescribeUserPoolClient",
-      "ec2:AuthorizeSecurityGroupIngress",
-      "ec2:CreateSecurityGroup",
-      "ec2:CreateTags",
-      "ec2:DeleteSecurityGroup",
-      "ec2:DeleteTags",
-      "ec2:DescribeAccountAttributes",
-      "ec2:DescribeAddresses",
-      "ec2:DescribeAvailabilityZones",
-      "ec2:DescribeCoipPools",
-      "ec2:DescribeInstances",
-      "ec2:DescribeInternetGateways",
-      "ec2:DescribeNetworkInterfaces",
-      "ec2:DescribeSecurityGroups",
-      "ec2:DescribeSubnets",
-      "ec2:DescribeTags",
-      "ec2:DescribeVpcPeeringConnections",
-      "ec2:DescribeVpcs",
-      "ec2:GetCoipPoolUsage",
-      "ec2:RevokeSecurityGroupIngress",
-      "elasticloadbalancing:*",
-      "iam:GetServerCertificate",
-      "iam:ListServerCertificates",
-      "shield:CreateProtection",
-      "shield:DeleteProtection",
-      "shield:DescribeProtection",
-      "shield:GetSubscriptionState",
-      "tag:GetResources",
-      "waf-regional:AssociateWebACL",
-      "waf-regional:DisassociateWebACL",
-      "waf-regional:GetWebACL",
-      "waf-regional:GetWebACLForResource",
-      "wafv2:AssociateWebACL",
-      "wafv2:DisassociateWebACL",
-      "wafv2:GetWebACL",
-      "wafv2:GetWebACLForResource"
-    ]
-
-    resources = ["*"]
-  }
-}
-
 resource "aws_iam_policy" "lb_controller" {
   name        = "${local.name_prefix}-lb-controller-policy"
   description = "Policy for AWS Load Balancer Controller"
-  policy      = data.aws_iam_policy_document.lb_controller.json
-  tags        = var.tags
+  # Official AWS Load Balancer Controller v3.3.0 policy:
+  # https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v3.3.0/docs/install/iam_policy.json
+  policy = file("${path.module}/aws-load-balancer-controller-iam-policy.json")
+  tags   = var.tags
 }
 
 resource "aws_iam_role_policy_attachment" "lb_controller" {
