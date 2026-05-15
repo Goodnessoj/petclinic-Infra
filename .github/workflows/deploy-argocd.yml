@@ -7,6 +7,9 @@ on:
     paths:
       - "k8s/argocd/**"
       - ".github/workflows/deploy-argocd.yml"
+  repository_dispatch:
+    types:
+      - deploy-argocd
   workflow_dispatch:
     inputs:
       environment:
@@ -42,7 +45,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: deploy-argocd-${{ github.event.inputs.environment || 'dev' }}
+  group: deploy-argocd-${{ github.event.client_payload.environment || github.event.inputs.environment || 'dev' }}
   cancel-in-progress: false
 
 env:
@@ -50,17 +53,17 @@ env:
   AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN || secrets.AWS_ROLE_TO_ASSUME || vars.AWS_ROLE_ARN || '' }}
   ARGOCD_NAMESPACE: argocd
   ARGOCD_RELEASE_NAME: argocd
-  ARGOCD_CHART_VERSION: ${{ github.event.inputs.chart_version || vars.ARGOCD_CHART_VERSION || '9.5.14' }}
-  DEPLOY_ENV: ${{ github.event.inputs.environment || 'dev' }}
-  INPUT_CLUSTER_NAME: ${{ github.event.inputs.cluster_name || '' }}
-  APPLY_APPLICATIONS: ${{ github.event.inputs.apply_applications }}
-  WAIT_APPLICATIONS: ${{ github.event.inputs.wait_applications }}
+  ARGOCD_CHART_VERSION: ${{ github.event.client_payload.chart_version || github.event.inputs.chart_version || vars.ARGOCD_CHART_VERSION || '9.5.14' }}
+  DEPLOY_ENV: ${{ github.event.client_payload.environment || github.event.inputs.environment || 'dev' }}
+  INPUT_CLUSTER_NAME: ${{ github.event.client_payload.cluster_name || github.event.inputs.cluster_name || '' }}
+  APPLY_APPLICATIONS: ""
+  WAIT_APPLICATIONS: ""
 
 jobs:
   deploy-argocd:
     name: Deploy ArgoCD
     runs-on: ubuntu-latest
-    environment: ${{ github.event.inputs.environment || 'dev' }}
+    environment: ${{ github.event.client_payload.environment || github.event.inputs.environment || 'dev' }}
 
     steps:
       - name: Checkout repository
@@ -84,6 +87,13 @@ jobs:
 
       - name: Resolve deployment context
         shell: bash
+        env:
+          DISPATCH_APPLY_APPLICATIONS: ${{ github.event.client_payload.apply_applications }}
+          DISPATCH_WAIT_APPLICATIONS: ${{ github.event.client_payload.wait_applications }}
+          DISPATCH_CHANGED_SERVICES: ${{ github.event.client_payload.changed_services || '' }}
+          DISPATCH_SERVICES: ${{ github.event.client_payload.services || '' }}
+          INPUT_APPLY_APPLICATIONS: ${{ github.event.inputs.apply_applications }}
+          INPUT_WAIT_APPLICATIONS: ${{ github.event.inputs.wait_applications }}
         run: |
           set -euo pipefail
 
@@ -102,11 +112,23 @@ jobs:
             CLUSTER_NAME="petclinic-${DEPLOY_ENV}-eks"
           fi
 
-          if [ -z "${APPLY_APPLICATIONS:-}" ]; then
+          APPLY_APPLICATIONS="$DISPATCH_APPLY_APPLICATIONS"
+
+          if [ -z "$APPLY_APPLICATIONS" ]; then
+            APPLY_APPLICATIONS="$INPUT_APPLY_APPLICATIONS"
+          fi
+
+          if [ -z "$APPLY_APPLICATIONS" ]; then
             APPLY_APPLICATIONS="true"
           fi
 
-          if [ -z "${WAIT_APPLICATIONS:-}" ]; then
+          WAIT_APPLICATIONS="$DISPATCH_WAIT_APPLICATIONS"
+
+          if [ -z "$WAIT_APPLICATIONS" ]; then
+            WAIT_APPLICATIONS="$INPUT_WAIT_APPLICATIONS"
+          fi
+
+          if [ -z "$WAIT_APPLICATIONS" ]; then
             WAIT_APPLICATIONS="true"
           fi
 
@@ -128,11 +150,33 @@ jobs:
               ;;
           esac
 
+          ALL_SERVICES="config-server discovery-server customers-service vets-service visits-service genai-service api-gateway admin-server"
+          RAW_SERVICES="${DISPATCH_CHANGED_SERVICES:-$DISPATCH_SERVICES}"
+
+          if [ -z "$RAW_SERVICES" ] || [ "$RAW_SERVICES" = "all" ]; then
+            REFRESH_SERVICES="$ALL_SERVICES"
+          else
+            REFRESH_SERVICES="$(printf '%s' "$RAW_SERVICES" | tr ',\n\r\t' '    ' | xargs)"
+          fi
+
+          for SERVICE in $REFRESH_SERVICES; do
+            case "$SERVICE" in
+              config-server|discovery-server|customers-service|vets-service|visits-service|genai-service|api-gateway|admin-server)
+                ;;
+              *)
+                echo "Unsupported service in dispatch payload: $SERVICE" >&2
+                exit 1
+                ;;
+            esac
+          done
+
           echo "CLUSTER_NAME=$CLUSTER_NAME" >> "$GITHUB_ENV"
           echo "APPLY_APPLICATIONS=$APPLY_APPLICATIONS" >> "$GITHUB_ENV"
           echo "WAIT_APPLICATIONS=$WAIT_APPLICATIONS" >> "$GITHUB_ENV"
+          echo "REFRESH_SERVICES=$REFRESH_SERVICES" >> "$GITHUB_ENV"
           echo "Cluster: $CLUSTER_NAME"
           echo "Environment: $DEPLOY_ENV"
+          echo "ArgoCD applications to refresh/wait: $REFRESH_SERVICES"
 
       - name: Update kubeconfig
         run: |
@@ -234,15 +278,7 @@ jobs:
           kubectl apply -f k8s/argocd/applications/project.yaml
           kubectl apply -k "k8s/argocd/applications/${DEPLOY_ENV}"
 
-          for SERVICE in \
-            config-server \
-            discovery-server \
-            customers-service \
-            vets-service \
-            visits-service \
-            genai-service \
-            api-gateway \
-            admin-server; do
+          for SERVICE in $REFRESH_SERVICES; do
             kubectl annotate application "${SERVICE}-${DEPLOY_ENV}" \
               --namespace "$ARGOCD_NAMESPACE" \
               argocd.argoproj.io/refresh=hard \
@@ -254,16 +290,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          SERVICES="
-          config-server
-          discovery-server
-          customers-service
-          vets-service
-          visits-service
-          genai-service
-          api-gateway
-          admin-server
-          "
+          SERVICES="$REFRESH_SERVICES"
+          EXPECTED_COUNT="$(printf '%s' "$SERVICES" | wc -w | tr -d ' ')"
 
           for _ in $(seq 1 60); do
             READY_COUNT=0
@@ -284,7 +312,7 @@ jobs:
 
             kubectl get applications --namespace "$ARGOCD_NAMESPACE" -o wide || true
 
-            if [ "$READY_COUNT" -eq 8 ]; then
+            if [ "$READY_COUNT" -eq "$EXPECTED_COUNT" ]; then
               exit 0
             fi
 
@@ -305,6 +333,7 @@ jobs:
             echo "- Helm release: \`${ARGOCD_RELEASE_NAME}\`"
             echo "- Chart version: \`${ARGOCD_CHART_VERSION:-latest}\`"
             echo "- Applications applied: \`${APPLY_APPLICATIONS}\`"
+            echo "- Applications refreshed: \`${REFRESH_SERVICES:-all}\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
           kubectl get pods --namespace "$ARGOCD_NAMESPACE" || true

@@ -1,6 +1,7 @@
 locals {
   external_secrets_namespace       = "external-secrets"
   external_secrets_service_account = "external-secrets"
+  external_dns_service_account     = "external-dns"
   application_namespace            = "petclinic-dev"
   load_balancer_namespace          = "kube-system"
   load_balancer_service_account    = "aws-load-balancer-controller"
@@ -16,11 +17,90 @@ locals {
   }
 }
 
+data "aws_partition" "current" {}
+
 data "aws_route53_zone" "platform" {
   count = var.enable_platform_ingress ? 1 : 0
 
   name         = var.root_domain_name
   private_zone = false
+}
+
+data "aws_iam_policy_document" "external_dns_assume_role" {
+  count = var.enable_platform_ingress ? 1 : 0
+
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "sts:AssumeRoleWithWebIdentity"
+    ]
+
+    principals {
+      type        = "Federated"
+      identifiers = [var.oidc_provider_arn]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${var.oidc_provider_url}:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${var.oidc_provider_url}:sub"
+      values   = ["system:serviceaccount:${local.load_balancer_namespace}:${local.external_dns_service_account}"]
+    }
+  }
+}
+
+resource "aws_iam_role" "external_dns" {
+  count = var.enable_platform_ingress ? 1 : 0
+
+  name               = "${var.cluster_name}-external-dns-role"
+  assume_role_policy = data.aws_iam_policy_document.external_dns_assume_role[0].json
+  tags               = var.tags
+}
+
+resource "aws_iam_policy" "external_dns" {
+  count = var.enable_platform_ingress ? 1 : 0
+
+  name        = "${var.cluster_name}-external-dns-policy"
+  description = "Policy for ExternalDNS to manage Route 53 records for ${var.root_domain_name}"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "route53:ChangeResourceRecordSets"
+        ]
+        Resource = [
+          "arn:${data.aws_partition.current.partition}:route53:::hostedzone/${data.aws_route53_zone.platform[0].zone_id}"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "route53:ListHostedZones",
+          "route53:ListResourceRecordSets",
+          "route53:ListTagsForResource"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+
+  tags = var.tags
+}
+
+resource "aws_iam_role_policy_attachment" "external_dns" {
+  count = var.enable_platform_ingress ? 1 : 0
+
+  role       = aws_iam_role.external_dns[0].name
+  policy_arn = aws_iam_policy.external_dns[0].arn
 }
 
 resource "kubernetes_namespace_v1" "application" {
@@ -109,6 +189,51 @@ resource "helm_release" "aws_load_balancer_controller" {
         }
       }
     })
+  ]
+}
+
+resource "helm_release" "external_dns" {
+  count = var.enable_platform_ingress ? 1 : 0
+
+  name       = "external-dns"
+  repository = "https://kubernetes-sigs.github.io/external-dns/"
+  chart      = "external-dns"
+  version    = var.external_dns_chart_version
+  namespace  = local.load_balancer_namespace
+
+  values = [
+    yamlencode({
+      provider = {
+        name = "aws"
+      }
+      sources            = ["ingress"]
+      policy             = "upsert-only"
+      registry           = "noop"
+      domainFilters      = [var.root_domain_name]
+      managedRecordTypes = ["CNAME"]
+      extraArgs = [
+        "--aws-zone-type=public",
+        "--aws-prefer-cname",
+      ]
+      env = [
+        {
+          name  = "AWS_DEFAULT_REGION"
+          value = var.aws_region
+        }
+      ]
+      serviceAccount = {
+        create = true
+        name   = local.external_dns_service_account
+        annotations = {
+          "eks.amazonaws.com/role-arn" = aws_iam_role.external_dns[0].arn
+        }
+      }
+    })
+  ]
+
+  depends_on = [
+    aws_iam_role_policy_attachment.external_dns,
+    helm_release.aws_load_balancer_controller,
   ]
 }
 

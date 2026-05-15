@@ -98,6 +98,11 @@ output "aws_load_balancer_controller_role_arn" {
   value       = module.addons.aws_load_balancer_controller_role_arn
 }
 
+output "external_dns_role_arn" {
+  description = "ExternalDNS IRSA role ARN."
+  value       = module.addons.external_dns_role_arn
+}
+
 output "application_namespace" {
   description = "Kubernetes namespace created for the Petclinic application."
   value       = module.addons.application_namespace

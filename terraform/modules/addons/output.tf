@@ -8,6 +8,11 @@ output "aws_load_balancer_controller_role_arn" {
   value       = var.aws_load_balancer_controller_role_arn
 }
 
+output "external_dns_role_arn" {
+  description = "IRSA role ARN used by ExternalDNS."
+  value       = var.enable_platform_ingress ? aws_iam_role.external_dns[0].arn : null
+}
+
 output "monitoring_namespace" {
   description = "Namespace where kube-prometheus-stack is installed."
   value       = helm_release.monitoring.namespace

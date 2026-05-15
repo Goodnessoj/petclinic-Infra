@@ -51,6 +51,12 @@ variable "aws_load_balancer_controller_chart_version" {
   default     = null
 }
 
+variable "external_dns_chart_version" {
+  description = "Optional pinned ExternalDNS Helm chart version."
+  type        = string
+  default     = null
+}
+
 variable "kube_prometheus_stack_chart_version" {
   description = "Optional pinned kube-prometheus-stack Helm chart version."
   type        = string

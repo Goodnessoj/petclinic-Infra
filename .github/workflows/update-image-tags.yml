@@ -81,7 +81,7 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Trigger deploy workflow
+      - name: Trigger ArgoCD deploy workflow
         if: steps.commit.outputs.changed == 'true'
         uses: actions/github-script@v7
         env:
@@ -103,13 +103,15 @@ jobs:
             await github.rest.repos.createDispatchEvent({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              event_type: 'deploy-services',
+              event_type: 'deploy-argocd',
               client_payload: {
                 environment: process.env.DEPLOY_ENVIRONMENT,
                 image_tag: process.env.IMAGE_TAG,
                 services: services.join(' '),
-                changed_services: services.join(' ')
+                changed_services: services.join(' '),
+                apply_applications: 'true',
+                wait_applications: 'true'
               }
             });
 
-            core.info(`Triggered deploy-services for: ${services.join(', ')}`);
+            core.info(`Triggered deploy-argocd for: ${services.join(', ')}`);

@@ -18,13 +18,6 @@ on:
         default: all
         type: string
 
-  repository_dispatch:
-    types:
-      - deploy-services
-      - deploy-service
-      - deploy-helm
-      - deploy-helm-chart
-
 permissions:
   contents: read
   id-token: write
