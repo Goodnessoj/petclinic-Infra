@@ -3,7 +3,7 @@ nameOverride: genai-service
 image:
   registry: 974263620909.dkr.ecr.us-east-2.amazonaws.com
   repository: petclinic-dev-genai-service
-  tag: "a9352bb"
+  tag: "a1b64c0"
   pullPolicy: IfNotPresent
 
 service:

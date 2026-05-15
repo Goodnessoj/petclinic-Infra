@@ -3,7 +3,7 @@ nameOverride: vets-service
 image:
   registry: 974263620909.dkr.ecr.us-east-2.amazonaws.com
   repository: petclinic-dev-vets-service
-  tag: "fb9f481"
+  tag: "a1b64c0"
   pullPolicy: IfNotPresent
 
 service:
