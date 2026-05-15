@@ -3,7 +3,7 @@ nameOverride: config-server
 image:
   registry: 974263620909.dkr.ecr.us-east-2.amazonaws.com
   repository: petclinic-dev-config-server
-  tag: "a1b64c0"
+  tag: "3ec23df"
   pullPolicy: IfNotPresent
 
 service:
