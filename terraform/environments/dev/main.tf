@@ -1,8 +1,15 @@
+data "aws_caller_identity" "current" {}
+
+data "aws_partition" "current" {}
+
 locals {
   name_prefix         = "${var.project_name}-${var.environment}"
   cluster_name        = "${local.name_prefix}-eks"
   argocd_domain_name  = "${var.argocd_subdomain}.${var.root_domain_name}"
   grafana_domain_name = "${var.grafana_subdomain}.${var.root_domain_name}"
+  github_actions_role_arn = trimspace(var.github_actions_role_arn) != "" ? trimspace(var.github_actions_role_arn) : (
+    "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:role/${var.github_actions_role_name}"
+  )
 
   common_tags = {
     Project     = var.project_name
@@ -36,19 +43,6 @@ module "observability" {
   tags         = local.common_tags
 }
 
-module "github_oidc" {
-  source = "../../modules/github-oidc"
-
-  name_prefix                 = var.project_name
-  github_repositories         = var.github_repositories
-  repository_prefix           = var.repository_prefix
-  role_name                   = var.github_actions_role_name
-  terraform_state_bucket_name = var.terraform_state_bucket_name
-  terraform_state_key_prefix  = var.terraform_state_key_prefix
-  terraform_state_kms_key_arn = var.terraform_state_kms_key_arn
-  tags                        = local.common_tags
-}
-
 module "eks" {
   source = "../../modules/eks"
 
@@ -65,7 +59,7 @@ module "eks" {
   node_desired_size          = var.eks_node_desired_size
   node_min_size              = var.eks_node_min_size
   node_max_size              = var.eks_node_max_size
-  github_actions_role_arn    = var.github_actions_role_arn
+  github_actions_role_arn    = local.github_actions_role_arn
   admin_role_arns            = var.eks_admin_role_arns
   tags                       = local.common_tags
 }
@@ -73,8 +67,7 @@ module "eks" {
 locals {
   aws_auth_admin_role_arns = distinct(compact(concat(
     [
-      module.github_oidc.github_actions_role_arn,
-      var.github_actions_role_arn,
+      local.github_actions_role_arn,
     ],
     var.eks_admin_role_arns
   )))

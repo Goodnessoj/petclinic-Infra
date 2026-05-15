@@ -34,6 +34,10 @@ resource "aws_iam_openid_connect_provider" "github" {
   ]
 
   tags = var.tags
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 data "aws_iam_policy_document" "assume_role" {
@@ -69,6 +73,10 @@ resource "aws_iam_role" "github_actions" {
   name               = local.role_name
   assume_role_policy = data.aws_iam_policy_document.assume_role.json
   tags               = var.tags
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 data "aws_iam_policy_document" "github_ecr_push" {
@@ -148,11 +156,19 @@ resource "aws_iam_policy" "github_ecr_push" {
   description = "Allow GitHub Actions to push Docker images to ECR"
   policy      = data.aws_iam_policy_document.github_ecr_push.json
   tags        = var.tags
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_iam_role_policy_attachment" "github_ecr_push" {
   role       = aws_iam_role.github_actions.name
   policy_arn = aws_iam_policy.github_ecr_push.arn
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 data "aws_iam_policy_document" "terraform_state" {
@@ -234,6 +250,10 @@ resource "aws_iam_policy" "terraform_state" {
   description = "Allow GitHub Actions to read and update Terraform remote state"
   policy      = data.aws_iam_policy_document.terraform_state[0].json
   tags        = var.tags
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_iam_role_policy_attachment" "terraform_state" {
@@ -241,6 +261,109 @@ resource "aws_iam_role_policy_attachment" "terraform_state" {
 
   role       = aws_iam_role.github_actions.name
   policy_arn = aws_iam_policy.terraform_state[0].arn
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+data "aws_iam_policy_document" "platform_terraform" {
+  count = var.enable_platform_terraform_permissions ? 1 : 0
+
+  statement {
+    sid    = "ReadCallerIdentity"
+    effect = "Allow"
+
+    actions = [
+      "sts:GetCallerIdentity"
+    ]
+
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "ManagePlatformAwsServices"
+    effect = "Allow"
+
+    actions = [
+      "acm:*",
+      "cloudwatch:*",
+      "ec2:*",
+      "ecr:*",
+      "eks:*",
+      "elasticloadbalancing:*",
+      "logs:*",
+      "rds:*",
+      "route53:*",
+      "secretsmanager:*",
+      "tag:*"
+    ]
+
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "ManagePlatformIam"
+    effect = "Allow"
+
+    actions = [
+      "iam:*"
+    ]
+
+    resources = [
+      "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:policy/${var.name_prefix}*",
+      "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:role/${var.name_prefix}*",
+      "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/*",
+      "arn:${data.aws_partition.current.partition}:iam::aws:policy/*"
+    ]
+  }
+
+  statement {
+    sid    = "ListIamResources"
+    effect = "Allow"
+
+    actions = [
+      "iam:List*",
+      "iam:GetAccountSummary"
+    ]
+
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "CreateServiceLinkedRoles"
+    effect = "Allow"
+
+    actions = [
+      "iam:CreateServiceLinkedRole"
+    ]
+
+    resources = ["*"]
+  }
+}
+
+resource "aws_iam_policy" "platform_terraform" {
+  count = var.enable_platform_terraform_permissions ? 1 : 0
+
+  name        = "${var.name_prefix}-github-platform-terraform-policy"
+  description = "Allow GitHub Actions to manage the platform Terraform stack"
+  policy      = data.aws_iam_policy_document.platform_terraform[0].json
+  tags        = var.tags
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "platform_terraform" {
+  count = var.enable_platform_terraform_permissions ? 1 : 0
+
+  role       = aws_iam_role.github_actions.name
+  policy_arn = aws_iam_policy.platform_terraform[0].arn
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_iam_role_policy_attachment" "additional" {

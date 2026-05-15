@@ -22,52 +22,10 @@ variable "repository_prefix" {
   default     = "petclinic-dev"
 }
 
-variable "github_repositories" {
-  description = "GitHub repositories allowed to assume the deployment role."
-  type = list(object({
-    owner        = string
-    name         = string
-    branches     = optional(list(string), ["main"])
-    environments = optional(list(string), [])
-  }))
-  default = [
-    {
-      owner        = "Goodnessoj"
-      name         = "petclinic-Infra"
-      branches     = ["main"]
-      environments = ["dev"]
-    },
-    {
-      owner        = "official-mary"
-      name         = "spring-petclinic-microservices"
-      branches     = ["main"]
-      environments = []
-    }
-  ]
-}
-
 variable "github_actions_role_name" {
-  description = "IAM role name assumed by GitHub Actions."
+  description = "Bootstrap-owned IAM role name assumed by GitHub Actions."
   type        = string
   default     = "petclinic-github-actions-role"
-}
-
-variable "terraform_state_bucket_name" {
-  description = "S3 bucket name used by the Terraform backend."
-  type        = string
-  default     = "petclinic-tfstate-974263620909"
-}
-
-variable "terraform_state_key_prefix" {
-  description = "S3 key prefix used by the Terraform backend."
-  type        = string
-  default     = "petclinic/dev"
-}
-
-variable "terraform_state_kms_key_arn" {
-  description = "Optional KMS key ARN used by the Terraform backend bucket."
-  type        = string
-  default     = ""
 }
 
 variable "vpc_cidr" {

@@ -53,6 +53,12 @@ variable "terraform_state_kms_key_arn" {
   default     = ""
 }
 
+variable "enable_platform_terraform_permissions" {
+  description = "Whether to attach permissions for this role to plan and apply the platform Terraform stack."
+  type        = bool
+  default     = false
+}
+
 variable "tags" {
   description = "Tags applied to IAM resources."
   type        = map(string)

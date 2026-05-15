@@ -25,7 +25,7 @@ output "eks_cluster_security_group_id" {
 
 output "eks_cluster_admin_principal" {
   description = "GitHub Actions principal intended for cluster administration."
-  value       = module.github_oidc.github_actions_role_arn
+  value       = local.github_actions_role_arn
 }
 
 output "kubectl_update_kubeconfig_command" {
@@ -73,14 +73,9 @@ output "openai_secret_arn" {
   value       = module.secrets.openai_secret_arn
 }
 
-output "github_oidc_provider_arn" {
-  description = "GitHub Actions OIDC provider ARN."
-  value       = module.github_oidc.oidc_provider_arn
-}
-
 output "github_actions_role_arn" {
   description = "IAM role ARN assumed by GitHub Actions."
-  value       = module.github_oidc.github_actions_role_arn
+  value       = local.github_actions_role_arn
 }
 
 output "external_secrets_role_arn" {
