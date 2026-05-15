@@ -3,7 +3,9 @@ data "aws_caller_identity" "current" {}
 data "aws_partition" "current" {}
 
 locals {
-  repository_prefix = trimsuffix(var.repository_prefix, "-")
+  repository_prefix             = trimsuffix(var.repository_prefix, "-")
+  terraform_state_key_prefix    = trim(var.terraform_state_key_prefix, "/")
+  create_terraform_state_policy = var.terraform_state_bucket_name != "" && local.terraform_state_key_prefix != ""
 
   github_subjects = distinct(flatten([
     for repo in var.github_repositories :
@@ -151,6 +153,94 @@ resource "aws_iam_policy" "github_ecr_push" {
 resource "aws_iam_role_policy_attachment" "github_ecr_push" {
   role       = aws_iam_role.github_actions.name
   policy_arn = aws_iam_policy.github_ecr_push.arn
+}
+
+data "aws_iam_policy_document" "terraform_state" {
+  count = local.create_terraform_state_policy ? 1 : 0
+
+  statement {
+    sid    = "GetTerraformStateBucketLocation"
+    effect = "Allow"
+
+    actions = [
+      "s3:GetBucketLocation"
+    ]
+
+    resources = [
+      "arn:${data.aws_partition.current.partition}:s3:::${var.terraform_state_bucket_name}"
+    ]
+  }
+
+  statement {
+    sid    = "ListTerraformStatePrefix"
+    effect = "Allow"
+
+    actions = [
+      "s3:ListBucket"
+    ]
+
+    resources = [
+      "arn:${data.aws_partition.current.partition}:s3:::${var.terraform_state_bucket_name}"
+    ]
+
+    condition {
+      test     = "StringLike"
+      variable = "s3:prefix"
+      values = [
+        local.terraform_state_key_prefix,
+        "${local.terraform_state_key_prefix}/*"
+      ]
+    }
+  }
+
+  statement {
+    sid    = "ManageTerraformStateObjects"
+    effect = "Allow"
+
+    actions = [
+      "s3:DeleteObject",
+      "s3:GetObject",
+      "s3:PutObject"
+    ]
+
+    resources = [
+      "arn:${data.aws_partition.current.partition}:s3:::${var.terraform_state_bucket_name}/${local.terraform_state_key_prefix}/*"
+    ]
+  }
+
+  dynamic "statement" {
+    for_each = var.terraform_state_kms_key_arn != "" ? [var.terraform_state_kms_key_arn] : []
+
+    content {
+      sid    = "UseTerraformStateKmsKey"
+      effect = "Allow"
+
+      actions = [
+        "kms:Decrypt",
+        "kms:DescribeKey",
+        "kms:Encrypt",
+        "kms:GenerateDataKey"
+      ]
+
+      resources = [statement.value]
+    }
+  }
+}
+
+resource "aws_iam_policy" "terraform_state" {
+  count = local.create_terraform_state_policy ? 1 : 0
+
+  name        = "${var.name_prefix}-github-terraform-state-policy"
+  description = "Allow GitHub Actions to read and update Terraform remote state"
+  policy      = data.aws_iam_policy_document.terraform_state[0].json
+  tags        = var.tags
+}
+
+resource "aws_iam_role_policy_attachment" "terraform_state" {
+  count = local.create_terraform_state_policy ? 1 : 0
+
+  role       = aws_iam_role.github_actions.name
+  policy_arn = aws_iam_policy.terraform_state[0].arn
 }
 
 resource "aws_iam_role_policy_attachment" "additional" {

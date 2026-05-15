@@ -52,6 +52,24 @@ variable "github_actions_role_name" {
   default     = "petclinic-github-actions-role"
 }
 
+variable "terraform_state_bucket_name" {
+  description = "S3 bucket name used by the Terraform backend."
+  type        = string
+  default     = "petclinic-tfstate-974263620909"
+}
+
+variable "terraform_state_key_prefix" {
+  description = "S3 key prefix used by the Terraform backend."
+  type        = string
+  default     = "petclinic/dev"
+}
+
+variable "terraform_state_kms_key_arn" {
+  description = "Optional KMS key ARN used by the Terraform backend bucket."
+  type        = string
+  default     = ""
+}
+
 variable "vpc_cidr" {
   description = "VPC CIDR block."
   type        = string

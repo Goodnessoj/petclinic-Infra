@@ -35,6 +35,24 @@ variable "additional_policy_arns" {
   default     = []
 }
 
+variable "terraform_state_bucket_name" {
+  description = "Optional S3 bucket name that stores Terraform remote state for workflows assuming this role."
+  type        = string
+  default     = ""
+}
+
+variable "terraform_state_key_prefix" {
+  description = "Optional S3 key prefix containing Terraform remote state objects."
+  type        = string
+  default     = ""
+}
+
+variable "terraform_state_kms_key_arn" {
+  description = "Optional KMS key ARN used to encrypt the Terraform remote state bucket."
+  type        = string
+  default     = ""
+}
+
 variable "tags" {
   description = "Tags applied to IAM resources."
   type        = map(string)

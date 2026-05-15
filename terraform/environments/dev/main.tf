@@ -39,11 +39,14 @@ module "observability" {
 module "github_oidc" {
   source = "../../modules/github-oidc"
 
-  name_prefix         = var.project_name
-  github_repositories = var.github_repositories
-  repository_prefix   = var.repository_prefix
-  role_name           = var.github_actions_role_name
-  tags                = local.common_tags
+  name_prefix                 = var.project_name
+  github_repositories         = var.github_repositories
+  repository_prefix           = var.repository_prefix
+  role_name                   = var.github_actions_role_name
+  terraform_state_bucket_name = var.terraform_state_bucket_name
+  terraform_state_key_prefix  = var.terraform_state_key_prefix
+  terraform_state_kms_key_arn = var.terraform_state_kms_key_arn
+  tags                        = local.common_tags
 }
 
 module "eks" {
