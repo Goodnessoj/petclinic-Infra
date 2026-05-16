@@ -50,7 +50,7 @@ terraform -chdir=terraform/environments/dev apply -var-file=terraform.tfvars
 The dev and prod roots configure:
 
 - `aws` for AWS infrastructure.
-- `kubernetes` for cluster resources such as `aws-auth`.
+- `kubernetes` for in-cluster platform resources.
 - `helm` for platform add-on charts.
 - `random` for generated passwords.
 - `tls` for EKS OIDC thumbprint discovery.

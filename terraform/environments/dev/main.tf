@@ -65,52 +65,6 @@ module "eks" {
   tags                       = local.common_tags
 }
 
-locals {
-  aws_auth_admin_role_arns = distinct(compact(concat(
-    [
-      local.github_actions_role_arn,
-    ],
-    var.eks_admin_role_arns
-  )))
-
-  aws_auth_roles = concat(
-    [
-      {
-        rolearn  = module.eks.node_role_arn
-        username = "system:node:{{EC2PrivateDNSName}}"
-        groups = [
-          "system:bootstrappers",
-          "system:nodes",
-        ]
-      }
-    ],
-    [
-      for role_arn in local.aws_auth_admin_role_arns : {
-        rolearn  = role_arn
-        username = "admin:${element(split("/", role_arn), length(split("/", role_arn)) - 1)}"
-        groups   = ["system:masters"]
-      }
-    ]
-  )
-}
-
-resource "kubernetes_config_map_v1_data" "aws_auth" {
-  metadata {
-    name      = "aws-auth"
-    namespace = "kube-system"
-  }
-
-  data = {
-    mapRoles = yamlencode(local.aws_auth_roles)
-  }
-
-  force = true
-
-  depends_on = [
-    module.eks
-  ]
-}
-
 module "rds" {
   source = "../../modules/rds"
 
@@ -180,7 +134,6 @@ module "addons" {
   tags                                  = local.common_tags
 
   depends_on = [
-    kubernetes_config_map_v1_data.aws_auth,
     module.eks,
     module.rds
   ]

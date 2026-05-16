@@ -9,8 +9,6 @@ Kubernetes foundation used by the dev Petclinic services.
 - ECR repositories for all Petclinic services.
 - CloudWatch log groups and a CloudWatch dashboard.
 - EKS cluster, managed node group, EKS add-ons, and IRSA roles.
-- `aws-auth` role mappings for worker nodes, GitHub Actions, and optional admin
-  roles.
 - RDS MySQL instance and database credential secret in AWS Secrets Manager.
 - OpenAI and Grafana Secrets Manager entries through the `secrets` module.
 - Optional Route 53 and ACM resources for app, Argo CD, and Grafana hostnames.

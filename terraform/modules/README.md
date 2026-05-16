@@ -25,11 +25,10 @@ The dev root wires modules in this order:
 2. `ecr`
 3. `observability`
 4. `eks`
-5. `aws-auth` Kubernetes ConfigMap in the root
-6. `rds`
-7. `secrets`
-8. `dns-ingress` when enabled
-9. `addons`
+5. `rds`
+6. `secrets`
+7. `dns-ingress` when enabled
+8. `addons`
 
 The `addons` module depends on a working EKS cluster and the IAM roles created
 by the `eks` module.

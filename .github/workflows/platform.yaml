@@ -169,6 +169,21 @@ jobs:
       - name: Terraform init
         run: terraform -chdir="$TF_WORKING_DIR" init -input=false
 
+      - name: Remove legacy aws-auth state binding
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          AWS_AUTH_ADDRESS="kubernetes_config_map_v1_data.aws_auth"
+          STATE_LIST="$(terraform -chdir="$TF_WORKING_DIR" state list 2>/dev/null || true)"
+
+          if printf '%s\n' "$STATE_LIST" | grep -Fxq "$AWS_AUTH_ADDRESS"; then
+            terraform -chdir="$TF_WORKING_DIR" state rm "$AWS_AUTH_ADDRESS"
+            echo "Removed $AWS_AUTH_ADDRESS from Terraform state; the live ConfigMap was not deleted."
+          else
+            echo "$AWS_AUTH_ADDRESS is not in Terraform state."
+          fi
+
       - name: Ensure EKS access for Terraform
         shell: bash
         run: |
@@ -276,6 +291,7 @@ jobs:
             fi
           }
 
+          sleep 20
           echo "Ensured EKS cluster-admin access for $PRINCIPAL_ARN on $CLUSTER_NAME."
 
       - name: Terraform validate

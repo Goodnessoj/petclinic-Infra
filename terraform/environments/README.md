@@ -40,8 +40,8 @@ The deployable environment roots compose these modules:
 - `dns-ingress` when DNS ingress is enabled
 - `addons`
 
-They also write the `aws-auth` ConfigMap so the managed node role and selected
-admin roles can access the cluster.
+The GitHub Actions platform workflow grants its Terraform role cluster-admin
+access with EKS access entries before refreshing Kubernetes and Helm resources.
 
 ## Variables
 

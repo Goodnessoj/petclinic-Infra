@@ -54,12 +54,11 @@ Key inputs:
 
 ## Access Model
 
-This module creates IAM resources, but the environment root owns the
-`aws-auth` ConfigMap. The root maps:
-
-- the node role into Kubernetes node groups,
-- the GitHub Actions role into `system:masters`,
-- any additional admin role ARNs into `system:masters`.
+This module creates IAM resources and IRSA roles. The GitHub Actions platform
+workflow grants its Terraform role cluster-admin access with EKS access entries
+before Terraform refreshes Kubernetes and Helm resources. The legacy
+`aws-auth` ConfigMap is left in the cluster for compatibility, but Terraform no
+longer manages it.
 
 ## Add-On Relationship
 
