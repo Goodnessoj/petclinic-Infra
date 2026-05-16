@@ -8,6 +8,9 @@ the platform.
 - `platform.yaml`: Terraform workflow for the platform environments. Manual
   dispatch selects `dev` or `prod` and supports `plan`, `apply`, and
   `destroy`; pull requests and pushes run plan-only checks against `dev`.
+  Before Terraform refreshes Kubernetes resources, it ensures the selected EKS
+  cluster grants the workflow role cluster-admin access through EKS access
+  entries.
 - `deploy-argocd.yml`: installs Argo CD, applies Argo CD RBAC, applies the
   Petclinic AppProject and Applications, then optionally waits for health.
 - `update-image-tags.yml`: listens for `repository_dispatch` events from the

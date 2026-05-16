@@ -35,7 +35,7 @@ variable "github_repositories" {
       owner        = "Goodnessoj"
       name         = "petclinic-Infra"
       branches     = ["main"]
-      environments = ["dev"]
+      environments = ["dev", "prod"]
     },
     {
       owner        = "official-mary"

@@ -72,6 +72,7 @@ env:
   SECRETS_RELEASE_NAME: petclinic-secrets
 
   TF_VAR_create_openai_secret: "false"
+  TF_VAR_github_actions_role_arn: ${{ secrets.AWS_ROLE_ARN || secrets.AWS_ROLE_TO_ASSUME || vars.AWS_ROLE_ARN || '' }}
   TF_VAR_argocd_repo_url: https://github.com/Goodnessoj/petclinic-Infra.git
   TF_VAR_argocd_repo_token: ${{ secrets.ARGOCD_REPO_TOKEN || '' }}
 
@@ -167,6 +168,115 @@ jobs:
 
       - name: Terraform init
         run: terraform -chdir="$TF_WORKING_DIR" init -input=false
+
+      - name: Ensure EKS access for Terraform
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          CLUSTER_NAME="$(terraform -chdir="$TF_WORKING_DIR" output -raw eks_cluster_name 2>/dev/null || true)"
+          if [ -z "$CLUSTER_NAME" ]; then
+            CLUSTER_NAME="$DEFAULT_CLUSTER_NAME"
+          fi
+
+          if ! aws eks describe-cluster \
+            --name "$CLUSTER_NAME" \
+            --region "$AWS_REGION" >/dev/null 2>&1; then
+            echo "EKS cluster $CLUSTER_NAME does not exist yet; skipping access bootstrap."
+            exit 0
+          fi
+
+          PRINCIPAL_ARN="${AWS_ROLE_ARN:-}"
+          if [ -z "$PRINCIPAL_ARN" ]; then
+            CALLER_ARN="$(aws sts get-caller-identity --query Arn --output text)"
+            ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+            PARTITION="$(printf '%s' "$CALLER_ARN" | cut -d: -f2)"
+
+            if [[ "$CALLER_ARN" == arn:*:sts::*:assumed-role/* ]]; then
+              ROLE_NAME="$(printf '%s' "$CALLER_ARN" | sed -E 's#^arn:[^:]+:sts::[0-9]+:assumed-role/([^/]+)/.*#\1#')"
+              PRINCIPAL_ARN="arn:${PARTITION}:iam::${ACCOUNT_ID}:role/${ROLE_NAME}"
+            else
+              PRINCIPAL_ARN="$CALLER_ARN"
+            fi
+          fi
+
+          echo "TF_VAR_github_actions_role_arn=$PRINCIPAL_ARN" >> "$GITHUB_ENV"
+
+          AUTH_MODE="$(aws eks describe-cluster \
+            --name "$CLUSTER_NAME" \
+            --region "$AWS_REGION" \
+            --query 'cluster.accessConfig.authenticationMode' \
+            --output text)"
+
+          if [ "$AUTH_MODE" = "CONFIG_MAP" ]; then
+            UPDATE_ID="$(aws eks update-cluster-config \
+              --name "$CLUSTER_NAME" \
+              --region "$AWS_REGION" \
+              --access-config authenticationMode=API_AND_CONFIG_MAP \
+              --query 'update.id' \
+              --output text)"
+
+            for _ in $(seq 1 60); do
+              UPDATE_STATUS="$(aws eks describe-update \
+                --name "$CLUSTER_NAME" \
+                --region "$AWS_REGION" \
+                --update-id "$UPDATE_ID" \
+                --query 'update.status' \
+                --output text)"
+
+              case "$UPDATE_STATUS" in
+                Successful)
+                  break
+                  ;;
+                Failed|Cancelled)
+                  aws eks describe-update \
+                    --name "$CLUSTER_NAME" \
+                    --region "$AWS_REGION" \
+                    --update-id "$UPDATE_ID"
+                  exit 1
+                  ;;
+              esac
+
+              sleep 10
+            done
+
+            AUTH_MODE="$(aws eks describe-cluster \
+              --name "$CLUSTER_NAME" \
+              --region "$AWS_REGION" \
+              --query 'cluster.accessConfig.authenticationMode' \
+              --output text)"
+
+            if [ "$AUTH_MODE" != "API_AND_CONFIG_MAP" ] && [ "$AUTH_MODE" != "API" ]; then
+              echo "Timed out waiting for EKS access entries to be enabled on $CLUSTER_NAME." >&2
+              exit 1
+            fi
+          fi
+
+          CREATE_OUTPUT="$(aws eks create-access-entry \
+            --cluster-name "$CLUSTER_NAME" \
+            --region "$AWS_REGION" \
+            --principal-arn "$PRINCIPAL_ARN" \
+            --type STANDARD 2>&1)" || {
+            if [[ "$CREATE_OUTPUT" != *"ResourceInUseException"* ]]; then
+              echo "$CREATE_OUTPUT" >&2
+              exit 1
+            fi
+          }
+
+          POLICY_ARN="arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+          ASSOCIATE_OUTPUT="$(aws eks associate-access-policy \
+            --cluster-name "$CLUSTER_NAME" \
+            --region "$AWS_REGION" \
+            --principal-arn "$PRINCIPAL_ARN" \
+            --policy-arn "$POLICY_ARN" \
+            --access-scope type=cluster 2>&1)" || {
+            if [[ "$ASSOCIATE_OUTPUT" != *"ResourceInUseException"* ]]; then
+              echo "$ASSOCIATE_OUTPUT" >&2
+              exit 1
+            fi
+          }
+
+          echo "Ensured EKS cluster-admin access for $PRINCIPAL_ARN on $CLUSTER_NAME."
 
       - name: Terraform validate
         run: terraform -chdir="$TF_WORKING_DIR" validate -no-color
