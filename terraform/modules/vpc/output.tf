@@ -6,6 +6,10 @@ output "vpc_id" {
 output "public_subnet_ids" {
   description = "Public subnet IDs"
   value       = aws_subnet.public[*].id
+
+  depends_on = [
+    aws_route_table_association.public
+  ]
 }
 
 output "eks_cluster_security_group_id" {

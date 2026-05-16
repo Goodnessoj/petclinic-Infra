@@ -122,6 +122,8 @@ resource "helm_release" "external_secrets" {
   version          = var.external_secrets_chart_version
   namespace        = local.external_secrets_namespace
   create_namespace = true
+  wait             = true
+  timeout          = 900
 
   values = [
     yamlencode({
@@ -175,6 +177,8 @@ resource "helm_release" "aws_load_balancer_controller" {
   chart      = "aws-load-balancer-controller"
   version    = var.aws_load_balancer_controller_chart_version
   namespace  = local.load_balancer_namespace
+  wait       = true
+  timeout    = 900
 
   values = [
     yamlencode({
@@ -200,6 +204,8 @@ resource "helm_release" "external_dns" {
   chart      = "external-dns"
   version    = var.external_dns_chart_version
   namespace  = local.load_balancer_namespace
+  wait       = true
+  timeout    = 900
 
   values = [
     yamlencode({
@@ -244,6 +250,8 @@ resource "helm_release" "argocd" {
   version          = var.argocd_chart_version
   namespace        = "argocd"
   create_namespace = true
+  wait             = true
+  timeout          = 900
 
   values = [
     yamlencode({
@@ -302,6 +310,10 @@ resource "kubernetes_ingress_v1" "argocd" {
   }
 
   wait_for_load_balancer = true
+
+  timeouts {
+    delete = "45m"
+  }
 
   depends_on = [
     helm_release.argocd,

@@ -309,6 +309,10 @@ resource "kubernetes_ingress_v1" "grafana" {
 
   wait_for_load_balancer = true
 
+  timeouts {
+    delete = "45m"
+  }
+
   depends_on = [
     helm_release.aws_load_balancer_controller,
     kubernetes_service_v1.grafana_alias,
@@ -355,6 +359,10 @@ resource "kubernetes_ingress_v1" "prometheus" {
   }
 
   wait_for_load_balancer = true
+
+  timeouts {
+    delete = "45m"
+  }
 
   depends_on = [
     helm_release.aws_load_balancer_controller,
