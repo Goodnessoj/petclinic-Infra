@@ -13,6 +13,12 @@ variable "vpc_id" {
   type        = string
 }
 
+variable "application_namespace" {
+  description = "Namespace where the Petclinic application is deployed."
+  type        = string
+  default     = "petclinic-dev"
+}
+
 variable "oidc_provider_arn" {
   description = "EKS OIDC provider ARN for IRSA."
   type        = string

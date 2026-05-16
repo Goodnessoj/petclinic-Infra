@@ -58,7 +58,8 @@ module "github_oidc" {
   repository_prefix                     = var.repository_prefix
   role_name                             = var.github_actions_role_name
   terraform_state_bucket_name           = aws_s3_bucket.terraform_state.bucket
-  terraform_state_key_prefix            = var.platform_state_key_prefix
+  terraform_state_key_prefix            = var.bootstrap_state_key_prefix
+  terraform_state_key_prefixes          = [var.platform_state_key_prefix, var.prod_state_key_prefix]
   terraform_state_kms_key_arn           = var.terraform_state_kms_key_arn
   enable_platform_terraform_permissions = true
   tags                                  = local.common_tags

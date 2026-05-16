@@ -47,6 +47,12 @@ variable "terraform_state_key_prefix" {
   default     = ""
 }
 
+variable "terraform_state_key_prefixes" {
+  description = "Additional S3 key prefixes containing Terraform remote state objects."
+  type        = list(string)
+  default     = []
+}
+
 variable "terraform_state_kms_key_arn" {
   description = "Optional KMS key ARN used to encrypt the Terraform remote state bucket."
   type        = string

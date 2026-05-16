@@ -3,9 +3,12 @@ data "aws_caller_identity" "current" {}
 data "aws_partition" "current" {}
 
 locals {
-  repository_prefix             = trimsuffix(var.repository_prefix, "-")
-  terraform_state_key_prefix    = trim(var.terraform_state_key_prefix, "/")
-  create_terraform_state_policy = var.terraform_state_bucket_name != "" && local.terraform_state_key_prefix != ""
+  repository_prefix = trimsuffix(var.repository_prefix, "-")
+  terraform_state_key_prefixes = distinct(compact(concat(
+    [trim(var.terraform_state_key_prefix, "/")],
+    [for prefix in var.terraform_state_key_prefixes : trim(prefix, "/")]
+  )))
+  create_terraform_state_policy = var.terraform_state_bucket_name != "" && length(local.terraform_state_key_prefixes) > 0
 
   github_subjects = distinct(flatten([
     for repo in var.github_repositories :
@@ -202,10 +205,12 @@ data "aws_iam_policy_document" "terraform_state" {
     condition {
       test     = "StringLike"
       variable = "s3:prefix"
-      values = [
-        local.terraform_state_key_prefix,
-        "${local.terraform_state_key_prefix}/*"
-      ]
+      values = flatten([
+        for prefix in local.terraform_state_key_prefixes : [
+          prefix,
+          "${prefix}/*"
+        ]
+      ])
     }
   }
 
@@ -220,7 +225,8 @@ data "aws_iam_policy_document" "terraform_state" {
     ]
 
     resources = [
-      "arn:${data.aws_partition.current.partition}:s3:::${var.terraform_state_bucket_name}/${local.terraform_state_key_prefix}/*"
+      for prefix in local.terraform_state_key_prefixes :
+      "arn:${data.aws_partition.current.partition}:s3:::${var.terraform_state_bucket_name}/${prefix}/*"
     ]
   }
 

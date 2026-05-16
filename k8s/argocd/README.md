@@ -1,32 +1,43 @@
-# ArgoCD GitOps
+# Argo CD GitOps
 
-This folder installs ArgoCD and registers one ArgoCD Application per Petclinic service.
+This folder contains the GitOps configuration for the Petclinic services.
 
-Runtime prerequisites still need to exist before the services become healthy:
+## Structure
 
-- `mysql-secret` in the target namespace, normally created by External Secrets.
-- `openai-secret` in the target namespace for `genai-service`. This secret is not committed to Git.
+| Path | Purpose |
+| --- | --- |
+| [`applications`](applications/README.md) | AppProject and Argo CD Applications for dev and prod. |
+| [`install`](install/README.md) | Fallback Argo CD installation layer for clusters that are not Helm-managed by Terraform. |
 
-For this EKS cluster, ArgoCD is installed by the Terraform addons module with the `argo-cd` Helm chart. Re-apply Terraform when you need to install or upgrade ArgoCD itself.
+## Installation Model
 
-The `install/` folder vendors the upstream install manifest as a fallback bootstrap option for a cluster that is not already Helm-managing ArgoCD. Do not apply that layer over the Terraform-managed `argocd` Helm release.
+For this EKS cluster, Argo CD is installed by the Terraform `addons` module with
+the `argo-cd` Helm chart. Re-apply Terraform when you need to install or upgrade
+the Terraform-managed Argo CD release.
 
-Fallback bootstrap for a fresh, non-Helm-managed cluster:
+The `install/` folder vendors a fallback install manifest. Do not apply that
+layer over the Terraform-managed `argocd` Helm release.
 
-```bash
-kubectl apply --server-side --force-conflicts -k k8s/argocd/install
-```
+## Applications
 
-Apply only the dev GitOps layer to this dev cluster:
+The applications layer registers one Argo CD Application per service:
 
-```bash
-kubectl apply -f k8s/argocd/applications/project.yaml
-kubectl apply -k k8s/argocd/applications/dev
-```
+- `config-server`
+- `discovery-server`
+- `customers-service`
+- `vets-service`
+- `visits-service`
+- `genai-service`
+- `api-gateway`
+- `admin-server`
 
-Dev applications sync automatically with prune and self-heal enabled. Prod applications are manual sync, with prune available during manual sync.
+Dev Applications sync automatically with prune and self-heal enabled. Prod
+Applications use manual sync.
 
-The Helm value files are intentionally ordered as environment first, service second:
+## Value File Order
+
+The Helm value files are intentionally ordered as environment first, service
+second:
 
 ```yaml
 valueFiles:
@@ -34,24 +45,58 @@ valueFiles:
   - ../../helm-values/customers-service.yaml
 ```
 
-ArgoCD and Helm merge later files last, and this repo stores the service image repository and tag in the per-service values files.
+Argo CD and Helm merge later files last. This repository stores service image
+repositories and tags in the per-service values files.
 
-Open the ArgoCD UI through DNS after the Terraform addons layer applies:
+## Runtime Prerequisites
+
+Before services become healthy:
+
+- `mysql-secret` must exist in the target namespace, normally created by
+  External Secrets from AWS Secrets Manager.
+- `openai-secret` must exist in the target namespace for `genai-service`.
+- `ClusterSecretStore/aws-secrets-manager` must exist.
+- The AWS Load Balancer Controller must exist when ingress is enabled.
+
+## Manual Apply
+
+Apply only the dev GitOps layer:
+
+```bash
+kubectl apply -f k8s/argocd/applications/project.yaml
+kubectl apply -k k8s/argocd/applications/dev
+```
+
+Apply only the prod GitOps layer:
+
+```bash
+kubectl apply -f k8s/argocd/applications/project.yaml
+kubectl apply -k k8s/argocd/applications/prod
+```
+
+## UI Access
+
+Open the Argo CD UI through DNS after the Terraform add-ons layer applies:
 
 ```text
 https://argocd.phoniex.site
 ```
 
-The local fallback is:
+Local fallback:
 
 ```bash
 kubectl -n argocd port-forward svc/argocd-server 8080:443
 ```
 
-Then browse to `https://localhost:8080`.
+Then browse to:
 
-Get the initial admin password with:
+```text
+https://localhost:8080
+```
+
+Get the initial admin password:
 
 ```bash
-kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d
+kubectl -n argocd get secret argocd-initial-admin-secret \
+  -o jsonpath='{.data.password}' | base64 -d
 ```

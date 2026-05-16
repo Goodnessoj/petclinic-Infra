@@ -64,6 +64,18 @@ variable "platform_state_key_prefix" {
   default     = "petclinic/dev"
 }
 
+variable "prod_state_key_prefix" {
+  description = "S3 key prefix containing the production platform Terraform state."
+  type        = string
+  default     = "petclinic/prod"
+}
+
+variable "bootstrap_state_key_prefix" {
+  description = "S3 key prefix containing this bootstrap root's Terraform state."
+  type        = string
+  default     = "petclinic/bootstrap"
+}
+
 variable "terraform_state_kms_key_arn" {
   description = "Optional KMS key ARN used by the Terraform backend bucket."
   type        = string

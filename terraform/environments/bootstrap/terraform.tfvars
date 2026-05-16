@@ -1,0 +1,8 @@
+project_name                = "petclinic"
+environment                 = "bootstrap"
+aws_region                  = "us-east-2"
+repository_prefix           = "petclinic-dev"
+terraform_state_bucket_name = "petclinic-tfstate-974263620909"
+bootstrap_state_key_prefix  = "petclinic/bootstrap"
+platform_state_key_prefix   = "petclinic/dev"
+prod_state_key_prefix       = "petclinic/prod"
