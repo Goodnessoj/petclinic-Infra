@@ -133,6 +133,11 @@ output "grafana_domain_name" {
   value       = var.enable_dns_ingress ? local.grafana_domain_name : null
 }
 
+output "prometheus_domain_name" {
+  description = "Prometheus UI domain name."
+  value       = var.enable_dns_ingress ? local.prometheus_domain_name : null
+}
+
 output "acm_certificate_arn" {
   description = "Validated ACM certificate ARN."
   value       = try(module.dns_ingress[0].acm_certificate_arn, null)

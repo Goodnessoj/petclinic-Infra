@@ -33,6 +33,11 @@ output "grafana_hostname" {
   value       = var.enable_platform_ingress ? var.grafana_hostname : null
 }
 
+output "prometheus_hostname" {
+  description = "External Prometheus hostname."
+  value       = var.enable_platform_ingress ? var.prometheus_hostname : null
+}
+
 output "application_namespace" {
   description = "Namespace where the Petclinic application is deployed."
   value       = kubernetes_namespace_v1.application.metadata[0].name

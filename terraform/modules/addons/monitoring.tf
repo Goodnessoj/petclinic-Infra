@@ -315,6 +315,53 @@ resource "kubernetes_ingress_v1" "grafana" {
   ]
 }
 
+resource "kubernetes_ingress_v1" "prometheus" {
+  count = var.enable_platform_ingress ? 1 : 0
+
+  metadata {
+    name      = "prometheus"
+    namespace = local.monitoring_namespace
+
+    labels = merge(local.observability_labels, {
+      "app.kubernetes.io/name" = "prometheus"
+    })
+
+    annotations = local.platform_ingress_annotations
+  }
+
+  spec {
+    ingress_class_name = "alb"
+
+    rule {
+      host = var.prometheus_hostname
+
+      http {
+        path {
+          path      = "/"
+          path_type = "Prefix"
+
+          backend {
+            service {
+              name = kubernetes_service_v1.prometheus_alias.metadata[0].name
+
+              port {
+                number = 9090
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  wait_for_load_balancer = true
+
+  depends_on = [
+    helm_release.aws_load_balancer_controller,
+    kubernetes_service_v1.prometheus_alias,
+  ]
+}
+
 resource "aws_route53_record" "grafana" {
   count = var.enable_platform_ingress ? 1 : 0
 
@@ -324,6 +371,17 @@ resource "aws_route53_record" "grafana" {
   type            = "CNAME"
   ttl             = 60
   records         = [kubernetes_ingress_v1.grafana[0].status[0].load_balancer[0].ingress[0].hostname]
+}
+
+resource "aws_route53_record" "prometheus" {
+  count = var.enable_platform_ingress ? 1 : 0
+
+  allow_overwrite = true
+  zone_id         = data.aws_route53_zone.platform[0].zone_id
+  name            = var.prometheus_hostname
+  type            = "CNAME"
+  ttl             = 60
+  records         = [kubernetes_ingress_v1.prometheus[0].status[0].load_balancer[0].ingress[0].hostname]
 }
 
 resource "kubernetes_service_v1" "alertmanager_alias" {

@@ -173,6 +173,12 @@ variable "grafana_subdomain" {
   default     = "grafana-prod"
 }
 
+variable "prometheus_subdomain" {
+  description = "Prometheus UI subdomain under the root domain."
+  type        = string
+  default     = "prometheus-prod"
+}
+
 variable "grafana_service_type" {
   description = "Grafana Kubernetes service type for kube-prometheus-stack."
   type        = string

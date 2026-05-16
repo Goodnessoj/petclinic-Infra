@@ -87,7 +87,7 @@ variable "grafana_service_type" {
 }
 
 variable "enable_platform_ingress" {
-  description = "Whether to expose ArgoCD and Grafana through ALB ingresses."
+  description = "Whether to expose ArgoCD, Grafana, and Prometheus through ALB ingresses."
   type        = bool
   default     = false
 }
@@ -110,8 +110,14 @@ variable "grafana_hostname" {
   default     = ""
 }
 
+variable "prometheus_hostname" {
+  description = "External hostname for the Prometheus UI."
+  type        = string
+  default     = ""
+}
+
 variable "platform_certificate_arn" {
-  description = "ACM certificate ARN used by ArgoCD and Grafana ALB ingresses."
+  description = "ACM certificate ARN used by ArgoCD, Grafana, and Prometheus ALB ingresses."
   type        = string
   default     = ""
 }
