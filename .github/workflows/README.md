@@ -5,9 +5,9 @@ the platform.
 
 ## File Guide
 
-- `platform.yaml`: Terraform workflow for the dev platform. It supports
-  `plan`, `apply`, and `destroy` through manual dispatch, while pull requests
-  and pushes run plan-only checks.
+- `platform.yaml`: Terraform workflow for the platform environments. Manual
+  dispatch selects `dev` or `prod` and supports `plan`, `apply`, and
+  `destroy`; pull requests and pushes run plan-only checks against `dev`.
 - `deploy-argocd.yml`: installs Argo CD, applies Argo CD RBAC, applies the
   Petclinic AppProject and Applications, then optionally waits for health.
 - `update-image-tags.yml`: listens for `repository_dispatch` events from the
