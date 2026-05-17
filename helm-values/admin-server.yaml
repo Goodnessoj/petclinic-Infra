@@ -8,8 +8,22 @@ service:
   port: 9090
   targetPort: 9090
 
+ingress:
+  enabled: true
+  className: alb
+  host: petclinic.phoniex.site
+  path: /admin
+  listenPorts:
+    - HTTP: 80
+    - HTTPS: 443
+  sslRedirect: "443"
+  annotations:
+    alb.ingress.kubernetes.io/healthcheck-path: /admin/actuator/health
+    alb.ingress.kubernetes.io/success-codes: "200-399"
+
 env:
   SPRING_PROFILES_ACTIVE: docker
+  SERVER_SERVLET_CONTEXT_PATH: /admin
   CONFIG_SERVER_URL: http://config-server:8888/
   EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
 

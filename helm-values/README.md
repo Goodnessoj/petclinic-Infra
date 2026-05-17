@@ -28,13 +28,13 @@ This means service files override environment defaults.
 | Service | Values file | Service port | Target port | Notes |
 | --- | --- | ---: | ---: | --- |
 | `config-server` | `config-server.yaml` | 8888 | 8888 | Reads config from the Spring Petclinic config repository. |
-| `discovery-server` | `discovery-server.yaml` | 8761 | 8761 | Eureka discovery service. |
+| `discovery-server` | `discovery-server.yaml` | 8761 | 8761 | Eureka discovery service; dev exposes `eureka.phoniex.site` and `discovery.phoniex.site`. |
 | `customers-service` | `customers-service.yaml` | 8081 | 8081 | Registers with Eureka and waits for config server. |
 | `visits-service` | `visits-service.yaml` | 8082 | 8082 | Registers with Eureka and waits for config server. |
 | `vets-service` | `vets-service.yaml` | 8083 | 8083 | Registers with Eureka and waits for config server. |
 | `genai-service` | `genai-service.yaml` | 8084 | 8084 | Consumes `openai-secret`. |
 | `api-gateway` | `api-gateway.yaml` | 80 | 8080 | Public edge service; ingress is enabled in the service values. |
-| `admin-server` | `admin-server.yaml` | 9090 | 9090 | Admin UI/service. |
+| `admin-server` | `admin-server.yaml` | 9090 | 9090 | Admin UI/service; dev exposes `petclinic.phoniex.site/admin`. |
 
 ## Image Tag Updates
 

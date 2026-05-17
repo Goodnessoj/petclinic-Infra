@@ -8,6 +8,17 @@ service:
   port: 8761
   targetPort: 8761
 
+ingress:
+  enabled: true
+  className: alb
+  hosts:
+    - eureka.phoniex.site
+    - discovery.phoniex.site
+  listenPorts:
+    - HTTP: 80
+    - HTTPS: 443
+  sslRedirect: "443"
+
 env:
   SPRING_PROFILES_ACTIVE: docker
   CONFIG_SERVER_URL: http://config-server:8888/

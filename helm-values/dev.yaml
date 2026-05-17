@@ -33,7 +33,7 @@ ingress:
   scheme: internet-facing
   targetType: ip
   host: petclinic.phoniex.site
-  certificateArn: "arn:aws:acm:us-east-2:974263620909:certificate/902889a4-5c11-421f-842c-075bec4b517e"
+  certificateArn: ""
   albName: petclinic-dev
   annotations:
     alb.ingress.kubernetes.io/group.name: petclinic-dev

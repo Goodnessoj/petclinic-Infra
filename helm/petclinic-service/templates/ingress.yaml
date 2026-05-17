@@ -1,4 +1,8 @@
 {{- if .Values.ingress.enabled }}
+{{- $hosts := .Values.ingress.hosts | default (list) -}}
+{{- if and (not $hosts) .Values.ingress.host -}}
+{{- $hosts = list .Values.ingress.host -}}
+{{- end -}}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -24,12 +28,21 @@ metadata:
 spec:
   ingressClassName: {{ .Values.ingress.className }}
   rules:
-    {{- if .Values.ingress.host }}
-    - host: {{ .Values.ingress.host | quote }}
+    {{- if $hosts }}
+    {{- range $host := $hosts }}
+    - host: {{ $host | quote }}
       http:
+        paths:
+          - path: {{ $.Values.ingress.path }}
+            pathType: {{ $.Values.ingress.pathType }}
+            backend:
+              service:
+                name: {{ include "petclinic-service.fullname" $ }}
+                port:
+                  number: {{ $.Values.service.port }}
+    {{- end }}
     {{- else }}
     - http:
-    {{- end }}
         paths:
           - path: {{ .Values.ingress.path }}
             pathType: {{ .Values.ingress.pathType }}
@@ -38,4 +51,5 @@ spec:
                 name: {{ include "petclinic-service.fullname" . }}
                 port:
                   number: {{ .Values.service.port }}
+    {{- end }}
 {{- end }}

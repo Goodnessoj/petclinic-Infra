@@ -8,6 +8,10 @@ locals {
   argocd_domain_name     = "${var.argocd_subdomain}.${var.root_domain_name}"
   grafana_domain_name    = "${var.grafana_subdomain}.${var.root_domain_name}"
   prometheus_domain_name = "${var.prometheus_subdomain}.${var.root_domain_name}"
+  public_service_subdomains = [
+    "eureka",
+    "discovery",
+  ]
   github_actions_role_arn = trimspace(var.github_actions_role_arn) != "" ? trimspace(var.github_actions_role_arn) : (
     "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:role/${var.github_actions_role_name}"
   )
@@ -99,7 +103,7 @@ module "dns_ingress" {
   environment            = var.environment
   root_domain_name       = var.root_domain_name
   app_subdomain          = var.app_subdomain
-  additional_subdomains  = [var.argocd_subdomain, var.grafana_subdomain, var.prometheus_subdomain]
+  additional_subdomains  = concat([var.argocd_subdomain, var.grafana_subdomain, var.prometheus_subdomain], local.public_service_subdomains)
   aws_region             = var.aws_region
   cluster_name           = module.eks.cluster_name
   cluster_endpoint       = module.eks.cluster_endpoint
