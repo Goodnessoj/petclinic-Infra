@@ -1,7 +1,7 @@
 nameOverride: vets-service
 
 image:
-  tag: "e3ab9fb"
+  tag: "1217e1d"
   pullPolicy: IfNotPresent
 
 service:
