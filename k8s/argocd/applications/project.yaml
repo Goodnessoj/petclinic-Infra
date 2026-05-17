@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: petclinic
+  namespace: argocd
+spec:
+  description: Spring Petclinic services managed by ArgoCD
+  sourceRepos:
+    - https://github.com/Goodnessoj/petclinic-Infra.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: petclinic-dev
+    - server: https://kubernetes.default.svc
+      namespace: petclinic-prod
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"

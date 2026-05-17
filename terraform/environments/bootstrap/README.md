@@ -1,0 +1,71 @@
+# Bootstrap Environment
+
+This Terraform root owns durable infrastructure required before any disposable
+platform environment can be managed safely.
+
+## What It Creates
+
+- S3 bucket for Terraform remote state.
+- Versioning, AES256 server-side encryption, public access blocking, and bucket
+  ownership controls for the state bucket.
+- GitHub Actions OIDC provider for `token.actions.githubusercontent.com`.
+- `petclinic-github-actions-role`.
+- IAM policies that let GitHub Actions:
+  - Push and pull prefixed ECR images.
+  - Read and write allowed Terraform state keys.
+  - Manage the dev and prod platform Terraform stacks when enabled.
+  - Update the OpenAI runtime secret in AWS Secrets Manager.
+
+## Safety Policy
+
+Do not destroy this root during normal environment rebuilds. It uses
+`prevent_destroy` on the state bucket and key GitHub OIDC resources because
+losing them can break Terraform state access and CI/CD authentication.
+
+Destroy only disposable environment roots such as `terraform/environments/dev`
+when rebuilding the platform.
+
+## Inputs
+
+Important variables:
+
+- `terraform_state_bucket_name`: remote state bucket name.
+- `github_repositories`: repositories and branches/environments allowed to
+  assume the GitHub Actions role.
+- `github_actions_role_name`: name of the OIDC role.
+- `repository_prefix`: ECR repository prefix GitHub Actions may push to.
+- `platform_state_key_prefix`, `prod_state_key_prefix`,
+  `bootstrap_state_key_prefix`: state prefixes permitted by the IAM policy.
+- `terraform_state_kms_key_arn`: optional KMS key for encrypted state access.
+
+## Outputs
+
+Useful outputs:
+
+- `terraform_state_bucket_name`
+- `github_oidc_provider_arn`
+- `github_actions_role_arn`
+- `github_actions_role_name`
+- `github_actions_allowed_subjects`
+
+## Usage
+
+```bash
+terraform -chdir=terraform/environments/bootstrap init
+terraform -chdir=terraform/environments/bootstrap fmt -check -recursive
+terraform -chdir=terraform/environments/bootstrap validate -no-color
+terraform -chdir=terraform/environments/bootstrap plan -var-file=terraform.tfvars
+terraform -chdir=terraform/environments/bootstrap apply -var-file=terraform.tfvars
+```
+
+After bootstrap is applied, copy `github_actions_role_arn` into the GitHub
+environment or repository secret/variable used by the workflows.
+
+## Typical Rebuild Flow
+
+```bash
+terraform -chdir=terraform/environments/dev destroy -var-file=terraform.tfvars
+terraform -chdir=terraform/environments/dev apply -var-file=terraform.tfvars
+```
+
+Leave the bootstrap root in place while doing that rebuild.

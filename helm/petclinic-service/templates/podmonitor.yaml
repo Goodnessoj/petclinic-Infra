@@ -1,0 +1,29 @@
+{{- if .Values.monitoring.podMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: {{ include "petclinic-service.fullname" . }}
+  namespace: {{ default .Release.Namespace .Values.monitoring.podMonitor.namespace }}
+  labels:
+    {{- include "petclinic-service.labels" . | nindent 4 }}
+    {{- with .Values.monitoring.podMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  selector:
+    matchLabels:
+      {{- include "petclinic-service.selectorLabels" . | nindent 6 }}
+  {{- with .Values.monitoring.podMonitor.podTargetLabels }}
+  podTargetLabels:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  podMetricsEndpoints:
+    - port: http
+      path: {{ .Values.monitoring.podMonitor.path }}
+      scheme: {{ .Values.monitoring.podMonitor.scheme }}
+      interval: {{ .Values.monitoring.podMonitor.interval }}
+      scrapeTimeout: {{ .Values.monitoring.podMonitor.scrapeTimeout }}
+{{- end }}

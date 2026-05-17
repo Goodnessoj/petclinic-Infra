@@ -1,0 +1,4 @@
+{{- range $object := .Values.objects }}
+---
+{{ toYaml $object }}
+{{- end }}
