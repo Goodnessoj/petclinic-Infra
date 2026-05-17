@@ -178,6 +178,99 @@ jobs:
           echo "Environment: $DEPLOY_ENV"
           echo "ArgoCD applications to refresh/wait: $REFRESH_SERVICES"
 
+      - name: Ensure EKS access for workflow role
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if ! aws eks describe-cluster \
+            --name "$CLUSTER_NAME" \
+            --region "$AWS_REGION" >/dev/null 2>&1; then
+            echo "EKS cluster $CLUSTER_NAME does not exist or is not visible to this workflow role." >&2
+            exit 1
+          fi
+
+          PRINCIPAL_ARN="${AWS_ROLE_ARN:-}"
+
+          if [ -z "$PRINCIPAL_ARN" ]; then
+            CALLER_ARN="$(aws sts get-caller-identity --query Arn --output text)"
+            ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+            PARTITION="$(printf '%s' "$CALLER_ARN" | cut -d: -f2)"
+
+            if [[ "$CALLER_ARN" == arn:*:sts::*:assumed-role/* ]]; then
+              ROLE_NAME="$(printf '%s' "$CALLER_ARN" | sed -E 's#^arn:[^:]+:sts::[0-9]+:assumed-role/([^/]+)/.*#\1#')"
+              PRINCIPAL_ARN="arn:${PARTITION}:iam::${ACCOUNT_ID}:role/${ROLE_NAME}"
+            else
+              PRINCIPAL_ARN="$CALLER_ARN"
+            fi
+          fi
+
+          AUTH_MODE="$(aws eks describe-cluster \
+            --name "$CLUSTER_NAME" \
+            --region "$AWS_REGION" \
+            --query 'cluster.accessConfig.authenticationMode' \
+            --output text)"
+
+          if [ "$AUTH_MODE" = "CONFIG_MAP" ]; then
+            UPDATE_ID="$(aws eks update-cluster-config \
+              --name "$CLUSTER_NAME" \
+              --region "$AWS_REGION" \
+              --access-config authenticationMode=API_AND_CONFIG_MAP \
+              --query 'update.id' \
+              --output text)"
+
+            for _ in $(seq 1 60); do
+              UPDATE_STATUS="$(aws eks describe-update \
+                --name "$CLUSTER_NAME" \
+                --region "$AWS_REGION" \
+                --update-id "$UPDATE_ID" \
+                --query 'update.status' \
+                --output text)"
+
+              case "$UPDATE_STATUS" in
+                Successful)
+                  break
+                  ;;
+                Failed|Cancelled)
+                  aws eks describe-update \
+                    --name "$CLUSTER_NAME" \
+                    --region "$AWS_REGION" \
+                    --update-id "$UPDATE_ID"
+                  exit 1
+                  ;;
+              esac
+
+              sleep 10
+            done
+          fi
+
+          CREATE_OUTPUT="$(aws eks create-access-entry \
+            --cluster-name "$CLUSTER_NAME" \
+            --region "$AWS_REGION" \
+            --principal-arn "$PRINCIPAL_ARN" \
+            --type STANDARD 2>&1)" || {
+            if [[ "$CREATE_OUTPUT" != *"ResourceInUseException"* ]]; then
+              echo "$CREATE_OUTPUT" >&2
+              exit 1
+            fi
+          }
+
+          POLICY_ARN="arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+          ASSOCIATE_OUTPUT="$(aws eks associate-access-policy \
+            --cluster-name "$CLUSTER_NAME" \
+            --region "$AWS_REGION" \
+            --principal-arn "$PRINCIPAL_ARN" \
+            --policy-arn "$POLICY_ARN" \
+            --access-scope type=cluster 2>&1)" || {
+            if [[ "$ASSOCIATE_OUTPUT" != *"ResourceInUseException"* ]]; then
+              echo "$ASSOCIATE_OUTPUT" >&2
+              exit 1
+            fi
+          }
+
+          sleep 20
+          echo "Ensured EKS cluster-admin access for $PRINCIPAL_ARN on $CLUSTER_NAME."
+
       - name: Update kubeconfig
         run: |
           aws eks update-kubeconfig \
@@ -203,8 +296,9 @@ jobs:
             --namespace "$ARGOCD_NAMESPACE"
             --create-namespace
             --wait
-            --timeout 10m
+            --timeout 30m
             --set configs.params.server\\.insecure=true
+            --set redis.serviceAccount.create=true
             --set redis.serviceAccount.name=argocd-redis
           )
 
