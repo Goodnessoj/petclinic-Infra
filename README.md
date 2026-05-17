@@ -26,7 +26,8 @@ The active deployment path is:
 ## Platform Components
 
 - **AWS account and region:** the current defaults target `us-east-2`.
-- **Terraform state:** S3 backend bucket `petclinic-tfstate-974263620909`.
+- **Terraform state:** S3 backend bucket `petclinic-tfstate-974263620909`,
+  created by the durable bootstrap root.
 - **GitHub identity:** GitHub Actions assumes `petclinic-github-actions-role`
   through AWS OIDC.
 - **Networking:** one VPC with public subnets tagged for EKS load balancers.
@@ -37,7 +38,8 @@ The active deployment path is:
   Kubernetes secrets such as `mysql-secret`; OpenAI runtime secret is also
   handled by the workflows.
 - **Ingress and DNS:** AWS Load Balancer Controller, optional ExternalDNS, ACM,
-  Route 53 records, and ALB-backed ingresses.
+  Route 53 records, and ALB-backed ingresses for the app, Argo CD, Grafana,
+  Prometheus, and selected dev service dashboards.
 - **Observability:** CloudWatch log groups, kube-prometheus-stack, Grafana,
   Loki, Fluent Bit, Zipkin, Prometheus alert rules, and a Petclinic Grafana
   dashboard.
@@ -134,13 +136,30 @@ Inspect Petclinic workloads:
 kubectl get pods,svc,ingress -n petclinic-dev
 ```
 
+Dev DNS endpoints, when DNS ingress is enabled:
+
+```text
+https://petclinic.phoniex.site
+https://petclinic.phoniex.site/admin
+https://eureka.phoniex.site
+https://discovery.phoniex.site
+https://argocd.phoniex.site
+https://grafana.phoniex.site
+https://prometheus.phoniex.site
+```
+
 ## Safety Notes
 
 - Do not destroy `terraform/environments/bootstrap` during normal environment
   rebuilds. It owns the Terraform state bucket and GitHub Actions OIDC role.
+- If Terraform reports `Failed to persist state to backend` and writes
+  `errored.tfstate`, do not run apply again first. Restore the backend bucket,
+  then run `terraform state push errored.tfstate` from the affected root.
 - `terraform.tfvars` files are no longer ignored by Git. Commit only sanitized
   values; keep credentials in GitHub secrets, your local shell, or another
   controlled secret source.
+- Terraform state files such as `terraform.tfstate` and `errored.tfstate` are
+  ignored by Git because they can contain secrets.
 - The `terraform/modules/ecr` module uses `force_delete = true`; repository
   destruction will remove images.
 - The prod Terraform root now has production-oriented variable defaults and

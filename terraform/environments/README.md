@@ -55,9 +55,22 @@ Use `terraform.tfvars` for local overrides. Important values include:
 - `openai_api_key` and `create_openai_secret`
 - `enable_dns_ingress`
 - `root_domain_name`, `app_subdomain`, `argocd_subdomain`,
-  `grafana_subdomain`
+  `grafana_subdomain`, `prometheus_subdomain`
 - Optional Argo CD repository credentials
 
 `terraform.tfvars` files are no longer ignored by Git. Commit only sanitized
 environment values, and keep credentials in GitHub secrets or another controlled
 secret source.
+
+## State Recovery
+
+If an apply or destroy fails while saving state, Terraform writes
+`errored.tfstate` into the affected environment directory. Do not run apply
+again first; that can fork state. Restore the S3 backend bucket if needed, then
+push the preserved state:
+
+```bash
+terraform -chdir=terraform/environments/dev state push errored.tfstate
+```
+
+After the push, run `terraform plan` and only apply if the plan is expected.

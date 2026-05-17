@@ -25,6 +25,11 @@ losing them can break Terraform state access and CI/CD authentication.
 Destroy only disposable environment roots such as `terraform/environments/dev`
 when rebuilding the platform.
 
+If the backend bucket is missing, recreate it before running more platform
+applies or destroys. When Terraform has written an `errored.tfstate` recovery
+file in an environment root, push that file back to the restored backend before
+running another apply.
+
 ## Inputs
 
 Important variables:

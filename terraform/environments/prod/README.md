@@ -27,6 +27,7 @@ Key defaults from `variable.tf`:
 - `app_subdomain = "petclinic-prod"`
 - `argocd_subdomain = "argocd-prod"`
 - `grafana_subdomain = "grafana-prod"`
+- `prometheus_subdomain = "prometheus-prod"`
 - EKS desired node count is `3`, with min `3` and max `6`.
 - RDS uses `db.t3.small`, 50 GB gp3 storage, Multi-AZ enabled, and 14 days of
   backup retention.
@@ -44,6 +45,9 @@ environments.
 - Confirm GitHub Actions role access and production environment protections.
 - Confirm prod Argo CD sync policy. The current prod Applications are manual
   sync rather than automated.
+- Confirm production ingress overrides. Some shared service values contain dev
+  public hostnames for convenience, so prod Applications should override or
+  disable those ingresses before public exposure.
 - Confirm whether production should use Terraform-managed OpenAI Secrets Manager
   storage or workflow-created Kubernetes secrets.
 
@@ -73,6 +77,7 @@ terraform -chdir=terraform/environments/prod apply -var-file=terraform.tfvars
 - `app_domain_name`
 - `argocd_domain_name`
 - `grafana_domain_name`
+- `prometheus_domain_name`
 
 ## Post-Apply Checks
 
@@ -82,4 +87,13 @@ kubectl get pods -n argocd
 kubectl get pods -n external-secrets
 kubectl get pods -n monitoring
 kubectl get clustersecretstore aws-secrets-manager
+```
+
+When DNS ingress is enabled, the Terraform platform hostnames default to:
+
+```text
+https://petclinic-prod.phoniex.site
+https://argocd-prod.phoniex.site
+https://grafana-prod.phoniex.site
+https://prometheus-prod.phoniex.site
 ```

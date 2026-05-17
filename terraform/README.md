@@ -31,6 +31,15 @@ The checked-in backends point to S3 keys:
 The state bucket is created by the bootstrap root and is currently named
 `petclinic-tfstate-974263620909`.
 
+Do not destroy the bootstrap root during routine rebuilds. If a platform apply
+or destroy reports `Failed to persist state to backend`, Terraform writes
+`errored.tfstate` in the affected root. Restore the S3 backend bucket first,
+then push the recovery file with:
+
+```bash
+terraform -chdir=terraform/environments/dev state push errored.tfstate
+```
+
 ## Standard Workflow
 
 Run Terraform from the repository root with `-chdir`:
@@ -43,7 +52,8 @@ terraform -chdir=terraform/environments/dev plan -var-file=terraform.tfvars
 terraform -chdir=terraform/environments/dev apply -var-file=terraform.tfvars
 ```
 
-`terraform.tfvars` contain's variable  defined in the workflow
+`terraform.tfvars` contains environment-specific variable values used by local
+runs and the platform workflow when the file exists.
 
 ## Provider Notes
 
@@ -56,7 +66,8 @@ The dev and prod roots configure:
 - `tls` for EKS OIDC thumbprint discovery.
 
 The Kubernetes and Helm providers authenticate to the EKS cluster created by the
-same root through `aws_eks_cluster_auth`.
+same root with AWS CLI exec auth (`aws eks get-token`). This avoids stale EKS
+tokens during long apply and destroy runs.
 
 ## Apply Order
 
@@ -65,4 +76,8 @@ same root through `aws_eks_cluster_auth`.
 3. Use Terraform outputs to update kubeconfig or let GitHub Actions do it.
 4. Bootstrap or refresh Argo CD applications.
 
-The `platform.yaml` workflow automates the dev version of this flow.
+For destroy runs, prefer the platform workflow. It removes GitOps Applications,
+ingresses, stale ExternalSecret finalizers, and TargetGroupBinding finalizers
+before Terraform deletes the EKS cluster, ACM certificate, and VPC.
+
+The `platform.yaml` workflow automates this flow for the selected environment.

@@ -33,8 +33,13 @@ This means service files override environment defaults.
 | `visits-service` | `visits-service.yaml` | 8082 | 8082 | Registers with Eureka and waits for config server. |
 | `vets-service` | `vets-service.yaml` | 8083 | 8083 | Registers with Eureka and waits for config server. |
 | `genai-service` | `genai-service.yaml` | 8084 | 8084 | Consumes `openai-secret`. |
-| `api-gateway` | `api-gateway.yaml` | 80 | 8080 | Public edge service; ingress is enabled in the service values. |
+| `api-gateway` | `api-gateway.yaml` | 80 | 8080 | Public edge service; dev exposes `petclinic.phoniex.site`. |
 | `admin-server` | `admin-server.yaml` | 9090 | 9090 | Admin UI/service; dev exposes `petclinic.phoniex.site/admin`. |
+
+The shared service values are used by both dev and prod Argo CD Applications.
+Some files intentionally contain dev public ingress hosts for the current dev
+deployment. Prod Applications should override or disable those ingress values
+before exposing production traffic.
 
 ## Image Tag Updates
 

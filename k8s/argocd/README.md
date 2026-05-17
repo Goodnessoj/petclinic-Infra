@@ -76,7 +76,7 @@ kubectl apply -k k8s/argocd/applications/prod
 
 ## UI Access
 
-Open the Argo CD UI through DNS after the Terraform add-ons layer applies:
+Open the dev Argo CD UI through DNS after the Terraform add-ons layer applies:
 
 ```text
 https://argocd.phoniex.site
@@ -99,4 +99,15 @@ Get the initial admin password:
 ```bash
 kubectl -n argocd get secret argocd-initial-admin-secret \
   -o jsonpath='{.data.password}' | base64 -d
+```
+
+Related dev public endpoints are managed by Terraform and service Helm values:
+
+```text
+https://petclinic.phoniex.site
+https://petclinic.phoniex.site/admin
+https://eureka.phoniex.site
+https://discovery.phoniex.site
+https://grafana.phoniex.site
+https://prometheus.phoniex.site
 ```

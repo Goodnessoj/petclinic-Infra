@@ -7,7 +7,7 @@ GitOps deployment loop.
 
 | Workflow | File | Purpose |
 | --- | --- | --- |
-| Platform | [`workflows/platform.yaml`](workflows/platform.yaml) | Plans, applies, or destroys the dev Terraform platform. On apply it can also bootstrap runtime secrets and Argo CD dev applications. |
+| Platform | [`workflows/platform.yaml`](workflows/platform.yaml) | Plans, applies, or destroys the selected Terraform platform. On apply it can also bootstrap runtime secrets and Argo CD applications. On destroy it pre-cleans GitOps ingresses/finalizers before Terraform removes AWS resources. |
 | Deploy ArgoCD | [`workflows/deploy-argocd.yml`](workflows/deploy-argocd.yml) | Installs or upgrades Argo CD with Helm, configures RBAC, applies Argo CD applications, and waits for selected apps. |
 | Update Image Tags | [`workflows/update-image-tags.yml`](workflows/update-image-tags.yml) | Receives app image build dispatches, updates service image tags in `helm-values`, commits the change, and triggers Argo CD deployment. |
 | Deploy Changed Petclinic Services | [`workflows/deploy-services.yaml`](workflows/deploy-services.yaml) | Imperatively deploys selected services with Helm in dependency order. This is useful when bypassing or recovering GitOps. |
@@ -27,7 +27,7 @@ Common repository or environment variables:
 Common secrets:
 
 - `OPENAI_API_KEY`: creates the Kubernetes `openai-secret` consumed by
-  `genai-service`.
+  `genai-service` when platform apply bootstraps GitOps.
 - `ARGOCD_REPO_TOKEN`: optional token for Argo CD private repository access.
 - `GITOPS_PAT`: optional token used by the image tag updater when the default
   `GITHUB_TOKEN` is not enough for pushing to `main` or dispatching workflows.
@@ -43,5 +43,8 @@ The normal automated flow starts in the application repository:
    `deploy-argocd.yml`.
 5. Argo CD refreshes the affected Applications and syncs dev automatically.
 
-The platform workflow is separate. Use it for infrastructure changes and initial
-cluster bootstrapping.
+The platform workflow is separate. Use it for infrastructure changes, initial
+cluster bootstrapping, and controlled environment teardown. Destroy runs delete
+Argo CD Applications, application/platform ingresses, stale ExternalSecret and
+TargetGroupBinding finalizers, then wait for the ACM certificate to detach
+before Terraform deletes the certificate and cluster.

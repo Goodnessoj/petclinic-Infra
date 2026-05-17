@@ -10,7 +10,9 @@ the platform.
   `destroy`; pull requests and pushes run plan-only checks against `dev`.
   Before Terraform refreshes Kubernetes resources, it ensures the selected EKS
   cluster grants the workflow role cluster-admin access through EKS access
-  entries.
+  entries. Destroy runs also set up kubectl, remove GitOps-owned ingresses and
+  stale finalizers, and wait for ACM certificate detach before Terraform deletes
+  AWS resources.
 - `deploy-argocd.yml`: installs Argo CD, applies Argo CD RBAC, applies the
   Petclinic AppProject and Applications, then optionally waits for health.
 - `update-image-tags.yml`: listens for `repository_dispatch` events from the
@@ -36,3 +38,10 @@ admin-server
 `config-server` must come first because other services read configuration from
 it. `discovery-server` follows because application services register with
 Eureka. Edge and admin components deploy after the backing services.
+
+## State Safety
+
+If Terraform completes real work but cannot write remote state, it writes
+`errored.tfstate` in the affected environment directory. Do not rerun apply or
+destroy until the backend is restored and the recovered state has been pushed
+with `terraform state push errored.tfstate`.

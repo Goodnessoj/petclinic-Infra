@@ -142,7 +142,7 @@ jobs:
           terraform_version: ${{ env.TF_VERSION }}
 
       - name: Set up kubectl
-        if: steps.mode.outputs.action == 'apply' && steps.mode.outputs.bootstrap_gitops == 'true'
+        if: steps.mode.outputs.action == 'destroy' || (steps.mode.outputs.action == 'apply' && steps.mode.outputs.bootstrap_gitops == 'true')
         uses: azure/setup-kubectl@v4
 
       - name: Set up Helm
@@ -319,6 +319,142 @@ jobs:
             terraform -chdir="$TF_WORKING_DIR" plan -destroy "${PLAN_ARGS[@]}"
           else
             terraform -chdir="$TF_WORKING_DIR" plan "${PLAN_ARGS[@]}"
+          fi
+
+      - name: Export destroy Kubernetes context
+        if: github.event_name == 'workflow_dispatch' && steps.mode.outputs.action == 'destroy'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          CLUSTER_NAME="$(terraform -chdir="$TF_WORKING_DIR" output -raw eks_cluster_name 2>/dev/null || true)"
+          APP_NAMESPACE="$(terraform -chdir="$TF_WORKING_DIR" output -raw application_namespace 2>/dev/null || true)"
+          ACM_CERTIFICATE_ARN="$(terraform -chdir="$TF_WORKING_DIR" output -raw acm_certificate_arn 2>/dev/null || true)"
+
+          if [ -z "$CLUSTER_NAME" ]; then
+            CLUSTER_NAME="$DEFAULT_CLUSTER_NAME"
+          fi
+
+          if [ -z "$APP_NAMESPACE" ]; then
+            APP_NAMESPACE="$DEFAULT_APP_NAMESPACE"
+          fi
+
+          echo "CLUSTER_NAME=$CLUSTER_NAME" >> "$GITHUB_ENV"
+          echo "APP_NAMESPACE=$APP_NAMESPACE" >> "$GITHUB_ENV"
+          echo "ACM_CERTIFICATE_ARN=$ACM_CERTIFICATE_ARN" >> "$GITHUB_ENV"
+
+      - name: Update kubeconfig for destroy cleanup
+        if: github.event_name == 'workflow_dispatch' && steps.mode.outputs.action == 'destroy'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if ! aws eks describe-cluster \
+            --name "$CLUSTER_NAME" \
+            --region "$AWS_REGION" >/dev/null 2>&1; then
+            echo "EKS cluster $CLUSTER_NAME does not exist; skipping Kubernetes cleanup."
+            exit 0
+          fi
+
+          aws eks update-kubeconfig \
+            --name "$CLUSTER_NAME" \
+            --region "$AWS_REGION"
+
+          kubectl config current-context
+
+      - name: Remove GitOps ingresses before destroy
+        if: github.event_name == 'workflow_dispatch' && steps.mode.outputs.action == 'destroy'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if ! kubectl auth can-i get namespaces >/dev/null 2>&1; then
+            echo "Kubernetes is not reachable; skipping GitOps ingress cleanup."
+            exit 0
+          fi
+
+          if kubectl get crd applications.argoproj.io >/dev/null 2>&1 && \
+             kubectl get namespace "$ARGOCD_NAMESPACE" >/dev/null 2>&1; then
+            for SERVICE in \
+              config-server \
+              discovery-server \
+              customers-service \
+              vets-service \
+              visits-service \
+              genai-service \
+              api-gateway \
+              admin-server; do
+              kubectl delete application "${SERVICE}-${DEPLOY_ENV}" \
+                --namespace "$ARGOCD_NAMESPACE" \
+                --ignore-not-found \
+                --wait=false || true
+            done
+          fi
+
+          if kubectl get crd externalsecrets.external-secrets.io >/dev/null 2>&1 && \
+             kubectl get namespace "$APP_NAMESPACE" >/dev/null 2>&1; then
+            kubectl delete externalsecret --all \
+              --namespace "$APP_NAMESPACE" \
+              --ignore-not-found \
+              --wait=false || true
+
+            for EXTERNAL_SECRET in $(kubectl get externalsecret \
+              --namespace "$APP_NAMESPACE" \
+              -o name 2>/dev/null || true); do
+              kubectl patch "$EXTERNAL_SECRET" \
+                --namespace "$APP_NAMESPACE" \
+                --type=json \
+                -p='[{"op":"remove","path":"/metadata/finalizers"}]' || true
+            done
+          fi
+
+          for NAMESPACE in "$APP_NAMESPACE" "$ARGOCD_NAMESPACE" monitoring; do
+            if kubectl get namespace "$NAMESPACE" >/dev/null 2>&1; then
+              kubectl delete ingress --all \
+                --namespace "$NAMESPACE" \
+                --ignore-not-found \
+                --wait=true \
+                --timeout=10m || true
+            fi
+          done
+
+          if kubectl get crd targetgroupbindings.elbv2.k8s.aws >/dev/null 2>&1 && \
+             kubectl get namespace "$APP_NAMESPACE" >/dev/null 2>&1; then
+            for TARGET_GROUP_BINDING in $(kubectl get targetgroupbinding \
+              --namespace "$APP_NAMESPACE" \
+              -o name 2>/dev/null || true); do
+              kubectl patch "$TARGET_GROUP_BINDING" \
+                --namespace "$APP_NAMESPACE" \
+                --type=json \
+                -p='[{"op":"remove","path":"/metadata/finalizers"}]' || true
+            done
+          fi
+
+          if [ -n "${ACM_CERTIFICATE_ARN:-}" ]; then
+            for _ in $(seq 1 60); do
+              IN_USE_COUNT="$(aws acm describe-certificate \
+                --region "$AWS_REGION" \
+                --certificate-arn "$ACM_CERTIFICATE_ARN" \
+                --query 'length(Certificate.InUseBy)' \
+                --output text 2>/dev/null || echo 0)"
+
+              if [ "$IN_USE_COUNT" = "0" ]; then
+                echo "ACM certificate is no longer attached to load balancers."
+                exit 0
+              fi
+
+              echo "Waiting for ACM certificate to detach from $IN_USE_COUNT load balancer listener(s)..."
+              sleep 10
+            done
+
+            aws acm describe-certificate \
+              --region "$AWS_REGION" \
+              --certificate-arn "$ACM_CERTIFICATE_ARN" \
+              --query 'Certificate.InUseBy' \
+              --output text || true
+
+            echo "Timed out waiting for ACM certificate detach." >&2
+            exit 1
           fi
 
       - name: Terraform apply

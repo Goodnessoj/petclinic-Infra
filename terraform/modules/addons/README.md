@@ -13,7 +13,7 @@ This module installs Kubernetes platform add-ons into the EKS cluster.
 - Optional ALB ingress and Route 53 record for Argo CD.
 - kube-prometheus-stack.
 - Grafana service alias, optional ALB ingress, and Route 53 record.
-- Prometheus service alias.
+- Prometheus service alias, optional ALB ingress, and Route 53 record.
 - Alertmanager service alias.
 - Loki deployment and service.
 - Fluent Bit log collection into Loki.
@@ -40,6 +40,7 @@ When platform ingress is enabled:
 - `root_domain_name`
 - `argocd_hostname`
 - `grafana_hostname`
+- `prometheus_hostname`
 - `platform_certificate_arn`
 - `platform_alb_group_name`
 - `platform_alb_name`
@@ -89,7 +90,16 @@ tracing environment variables in the service values files.
 - `argocd_namespace`
 - `argocd_hostname`
 - `grafana_hostname`
+- `prometheus_hostname`
 - `application_namespace`
+
+## Destroy Behavior
+
+The application namespace depends on External Secrets Operator so Terraform
+destroys application ExternalSecret resources before uninstalling the controller.
+The platform workflow also removes GitOps Applications, ingresses, stale
+ExternalSecret finalizers, and TargetGroupBinding finalizers before Terraform
+destroys the cluster.
 
 ## Verification
 

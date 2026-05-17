@@ -140,6 +140,10 @@ resource "kubernetes_namespace_v1" "application" {
       "petclinic.io/environment"  = var.environment
     }
   }
+
+  depends_on = [
+    helm_release.external_secrets
+  ]
 }
 
 resource "helm_release" "external_secrets" {

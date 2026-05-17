@@ -11,7 +11,8 @@ Kubernetes foundation used by the dev Petclinic services.
 - EKS cluster, managed node group, EKS add-ons, and IRSA roles.
 - RDS MySQL instance and database credential secret in AWS Secrets Manager.
 - OpenAI and Grafana Secrets Manager entries through the `secrets` module.
-- Optional Route 53 and ACM resources for app, Argo CD, and Grafana hostnames.
+- Optional Route 53 and ACM resources for app, Argo CD, Grafana, Prometheus,
+  Eureka, and Discovery hostnames.
 - External Secrets Operator, AWS Load Balancer Controller, optional ExternalDNS,
   Argo CD, kube-prometheus-stack, Grafana, Loki, and related platform services.
 
@@ -28,6 +29,7 @@ Key defaults from `variable.tf`:
 - `app_subdomain = "petclinic"`
 - `argocd_subdomain = "argocd"`
 - `grafana_subdomain = "grafana"`
+- `prometheus_subdomain = "prometheus"`
 - EKS desired node count is `3` with `t3.medium` nodes.
 - RDS uses `db.t3.micro`, 20 GB gp3 storage, and single-AZ by default.
 
@@ -81,6 +83,7 @@ kubectl get nodes
 - `application_namespace`
 - `argocd_domain_name`
 - `grafana_domain_name`
+- `prometheus_domain_name`
 - `app_domain_name`
 
 ## Post-Apply Checks
@@ -93,9 +96,28 @@ kubectl get pods -n monitoring
 kubectl get clustersecretstore aws-secrets-manager
 ```
 
-If `enable_dns_ingress` is true, Argo CD and Grafana are expected at:
+If `enable_dns_ingress` is true, dev endpoints are expected at:
 
 ```text
+https://petclinic.phoniex.site
+https://petclinic.phoniex.site/admin
+https://eureka.phoniex.site
+https://discovery.phoniex.site
 https://argocd.phoniex.site
 https://grafana.phoniex.site
+https://prometheus.phoniex.site
+```
+
+## Destroy And Reapply
+
+Keep `terraform/environments/bootstrap` in place. For routine dev teardown,
+prefer the platform workflow because it removes Argo CD Applications, ingresses,
+stale ExternalSecret finalizers, and TargetGroupBinding finalizers before
+Terraform deletes the ACM certificate and cluster.
+
+If a local apply or destroy reports `Failed to persist state to backend`, do not
+run apply again first. Restore the backend bucket if needed, then run:
+
+```bash
+terraform -chdir=terraform/environments/dev state push errored.tfstate
 ```

@@ -110,7 +110,9 @@ Prometheus selector configured by the Terraform add-ons module.
 
 ## Ingress
 
-Ingress is usually enabled only for `api-gateway`. The chart emits AWS Load
+The chart supports a single `ingress.host`, multiple `ingress.hosts`, and
+path-based routing through `ingress.path`. In dev, ingress is enabled for
+`api-gateway`, `admin-server`, and `discovery-server`. The chart emits AWS Load
 Balancer Controller annotations for:
 
 - scheme
