@@ -1,7 +1,7 @@
 nameOverride: discovery-server
 
 image:
-  tag: "3ec23df"
+  tag: "1217e1d"
   pullPolicy: IfNotPresent
 
 service:
