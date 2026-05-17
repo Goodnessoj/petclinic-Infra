@@ -54,6 +54,8 @@ env:
   ARGOCD_NAMESPACE: argocd
   ARGOCD_RELEASE_NAME: argocd
   ARGOCD_CHART_VERSION: ${{ github.event.client_payload.chart_version || github.event.inputs.chart_version || vars.ARGOCD_CHART_VERSION || '9.5.14' }}
+  SECRETS_CHART: helm/petclinic-secrets
+  SECRETS_RELEASE_NAME: petclinic-secrets
   DEPLOY_ENV: ${{ github.event.client_payload.environment || github.event.inputs.environment || 'dev' }}
   INPUT_CLUSTER_NAME: ${{ github.event.client_payload.cluster_name || github.event.inputs.cluster_name || '' }}
   APPLY_APPLICATIONS: ""
@@ -110,6 +112,14 @@ jobs:
 
           if [ -z "$CLUSTER_NAME" ]; then
             CLUSTER_NAME="petclinic-${DEPLOY_ENV}-eks"
+          fi
+
+          APP_NAMESPACE="petclinic-${DEPLOY_ENV}"
+          SECRETS_VALUES_FILE="helm-values/secrets-${DEPLOY_ENV}.yaml"
+
+          if [ ! -f "$SECRETS_VALUES_FILE" ]; then
+            echo "Missing secrets values file: $SECRETS_VALUES_FILE" >&2
+            exit 1
           fi
 
           APPLY_APPLICATIONS="$DISPATCH_APPLY_APPLICATIONS"
@@ -171,10 +181,13 @@ jobs:
           done
 
           echo "CLUSTER_NAME=$CLUSTER_NAME" >> "$GITHUB_ENV"
+          echo "APP_NAMESPACE=$APP_NAMESPACE" >> "$GITHUB_ENV"
+          echo "SECRETS_VALUES_FILE=$SECRETS_VALUES_FILE" >> "$GITHUB_ENV"
           echo "APPLY_APPLICATIONS=$APPLY_APPLICATIONS" >> "$GITHUB_ENV"
           echo "WAIT_APPLICATIONS=$WAIT_APPLICATIONS" >> "$GITHUB_ENV"
           echo "REFRESH_SERVICES=$REFRESH_SERVICES" >> "$GITHUB_ENV"
           echo "Cluster: $CLUSTER_NAME"
+          echo "Application namespace: $APP_NAMESPACE"
           echo "Environment: $DEPLOY_ENV"
           echo "ArgoCD applications to refresh/wait: $REFRESH_SERVICES"
 
@@ -363,6 +376,101 @@ jobs:
           kubectl rollout status statefulset/argocd-application-controller \
             --namespace "$ARGOCD_NAMESPACE" \
             --timeout=300s
+
+      - name: Create app namespace
+        if: env.APPLY_APPLICATIONS == 'true'
+        run: |
+          kubectl create namespace "$APP_NAMESPACE" \
+            --dry-run=client \
+            -o yaml | kubectl apply -f -
+
+      - name: Validate runtime secret prerequisites
+        if: env.APPLY_APPLICATIONS == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          CLUSTER_SECRET_STORE="$(awk '/^[[:space:]]*secretStoreName:/ { print $2; exit }' "$SECRETS_VALUES_FILE")"
+
+          if [ -z "$CLUSTER_SECRET_STORE" ]; then
+            echo "Unable to resolve secretStoreName from $SECRETS_VALUES_FILE." >&2
+            exit 1
+          fi
+
+          if ! kubectl get crd externalsecrets.external-secrets.io >/dev/null 2>&1; then
+            echo "ExternalSecret CRD is missing. Apply the Terraform addons layer first." >&2
+            exit 1
+          fi
+
+          if ! kubectl get crd clustersecretstores.external-secrets.io >/dev/null 2>&1; then
+            echo "ClusterSecretStore CRD is missing. Apply the Terraform addons layer first." >&2
+            exit 1
+          fi
+
+          if ! kubectl get clustersecretstore "$CLUSTER_SECRET_STORE" >/dev/null 2>&1; then
+            echo "ClusterSecretStore '$CLUSTER_SECRET_STORE' is missing. Apply the Terraform addons layer first." >&2
+            exit 1
+          fi
+
+      - name: Create or update OpenAI secret
+        if: env.APPLY_APPLICATIONS == 'true'
+        shell: bash
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${OPENAI_API_KEY:-}" ]; then
+            echo "GitHub secret OPENAI_API_KEY is missing or empty." >&2
+            exit 1
+          fi
+
+          kubectl delete externalsecret petclinic-openai-secret \
+            --namespace "$APP_NAMESPACE" \
+            --ignore-not-found
+
+          kubectl delete secret openai-secret \
+            --namespace "$APP_NAMESPACE" \
+            --ignore-not-found
+
+          kubectl create secret generic openai-secret \
+            --namespace "$APP_NAMESPACE" \
+            --from-literal=SPRING_AI_OPENAI_API_KEY="$OPENAI_API_KEY" \
+            --dry-run=client \
+            -o yaml | kubectl apply -f -
+
+      - name: Install shared ExternalSecrets chart
+        if: env.APPLY_APPLICATIONS == 'true'
+        run: |
+          helm upgrade --install "$SECRETS_RELEASE_NAME" "$SECRETS_CHART" \
+            --namespace "$APP_NAMESPACE" \
+            --create-namespace \
+            --wait \
+            --timeout 5m \
+            --cleanup-on-fail \
+            -f "$SECRETS_VALUES_FILE" \
+            --set openai.enabled=false
+
+      - name: Wait for database secret
+        if: env.APPLY_APPLICATIONS == 'true'
+        run: |
+          set -euo pipefail
+
+          for _ in $(seq 1 40); do
+            if kubectl get secret mysql-secret --namespace "$APP_NAMESPACE" >/dev/null 2>&1; then
+              echo "mysql-secret exists."
+              exit 0
+            fi
+
+            sleep 5
+          done
+
+          kubectl get externalsecret petclinic-db-secret \
+            --namespace "$APP_NAMESPACE" \
+            -o yaml || true
+
+          echo "mysql-secret was not created by External Secrets within the timeout window." >&2
+          exit 1
 
       - name: Apply Petclinic ArgoCD applications
         if: env.APPLY_APPLICATIONS == 'true'
