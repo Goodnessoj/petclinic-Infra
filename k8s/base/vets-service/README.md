@@ -1,7 +1,8 @@
 # Vets Service Raw Manifests
 
-This folder is reserved for raw Kubernetes manifests for `vets-service`.
+This folder contains the raw Kubernetes Deployment and Service for
+`vets-service`.
 
-The current YAML files are empty. The active deployment is the `vets-service-dev`
+The active deployment is still the `vets-service-dev`
 or `vets-service-prod` Argo CD Application, which renders
 `helm/petclinic-service` with `helm-values/vets-service.yaml`.

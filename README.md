@@ -20,7 +20,7 @@ The active deployment path is:
 | [`terraform/`](terraform/README.md) | Terraform roots and reusable modules for AWS infrastructure. |
 | [`helm/`](helm/README.md) | Helm charts for service workloads and shared ExternalSecret resources. |
 | [`helm-values/`](helm-values/README.md) | Environment and service-specific values consumed by Helm and Argo CD. |
-| [`k8s/`](k8s/README.md) | Kubernetes and Argo CD manifests. The active app deployment path is under `k8s/argocd`. |
+| [`k8s/`](k8s/README.md) | Raw Kubernetes/Kustomize reference manifests plus the active Argo CD Application definitions. |
 | [`scripts/`](scripts/README.md) | Local helper scripts for Terraform backend and AWS/ECR tasks. |
 
 ## Platform Components
@@ -90,6 +90,11 @@ kubectl get nodes
 ```
 
 ## Deploying Applications
+
+This repo keeps the raw Kubernetes manifests that were built before the
+deployment moved to Helm. They live under `k8s/base` with dev/prod overlays
+under `k8s/overlays`. They are useful for review and for understanding the
+Kubernetes shape, but the active deployment path is Helm through Argo CD.
 
 Argo CD is installed by Terraform through the add-ons module. The dev
 applications can also be applied manually:

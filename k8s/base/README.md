@@ -1,12 +1,13 @@
 # Raw Kubernetes Base
 
-This folder is a placeholder for raw Kubernetes manifests grouped by service and
-platform concern.
+This folder contains the raw Kubernetes reference manifests that were built
+before the active deployment moved to Helm and Argo CD.
 
 ## Current State
 
-The YAML files in this folder are currently empty. They are not the active
-deployment path.
+The base contains Deployments and Services for all eight Petclinic services,
+plus namespace and ExternalSecret resources. These manifests are rendered by the
+dev and prod Kustomize overlays under `k8s/overlays`.
 
 The active application deployment path is:
 
@@ -14,7 +15,7 @@ The active application deployment path is:
 k8s/argocd/applications -> helm/petclinic-service -> helm-values
 ```
 
-## Placeholder Folders
+## Folders
 
 - `admin-server`
 - `api-gateway`
@@ -28,17 +29,23 @@ k8s/argocd/applications -> helm/petclinic-service -> helm-values
 - `vets-service`
 - `visits-service`
 
-## If You Reintroduce Raw Manifests
+## Deployment Shape
 
-Add a `kustomization.yaml` and keep resources aligned with the Helm chart:
+- Services that depend on Config Server and Discovery Server use BusyBox init
+  containers to wait for `/actuator/health`.
+- Every Deployment has startup, readiness, and liveness probes.
+- Config Server uses `/actuator/health` for all probes; the other services use
+  `/actuator/health`, `/actuator/health/readiness`, and
+  `/actuator/health/liveness`.
+- Pod and container security contexts run as non-root, use `RuntimeDefault`
+  seccomp, and drop Linux capabilities.
 
-- labels and selectors,
-- service names and ports,
-- probes,
-- environment variables,
-- ExternalSecret names,
-- PodMonitor labels,
-- ALB annotations.
+## Render
 
-Avoid maintaining two active deployment definitions for the same service unless
-there is a clear migration plan.
+```bash
+kubectl kustomize k8s/overlays/dev
+kubectl kustomize k8s/overlays/prod
+```
+
+Do not apply these manifests to a namespace already managed by Argo CD Helm
+Applications.

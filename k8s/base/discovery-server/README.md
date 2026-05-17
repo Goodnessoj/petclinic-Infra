@@ -1,8 +1,9 @@
 # Discovery Server Raw Manifests
 
-This folder is reserved for raw Kubernetes manifests for `discovery-server`.
+This folder contains the raw Kubernetes Deployment and Service for
+`discovery-server`.
 
-The current YAML files are empty. The active deployment is the
+The active deployment is still the
 `discovery-server-dev` or `discovery-server-prod` Argo CD Application, which
 renders `helm/petclinic-service` with `helm-values/discovery-server.yaml`.
 

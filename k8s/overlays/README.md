@@ -1,12 +1,11 @@
 # Kubernetes Overlays
 
-This folder is reserved for future Kustomize overlays that would customize the
-raw manifests under `k8s/base`.
+This folder contains Kustomize overlays for the raw manifests under `k8s/base`.
 
 ## Current State
 
-The overlay tree is currently empty and is not part of the active deployment
-flow.
+The overlays are reference manifests from the pre-Helm phase. They are not the
+active deployment flow, but they render complete dev and prod Kubernetes YAML.
 
 Use the Argo CD and Helm path for current deployments:
 
@@ -16,14 +15,16 @@ helm/petclinic-service
 helm-values
 ```
 
-## Expected Future Use
+## Overlay Behavior
 
-If raw Kubernetes manifests are reintroduced, overlays can hold
-environment-specific patches such as:
+- `dev`: namespace `petclinic-dev`, one replica, 100m CPU and 256Mi memory
+  requests.
+- `prod`: namespace `petclinic-prod`, two replicas, 250m CPU and 512Mi memory
+  requests, HPAs for API Gateway/customers/visits/vets, and PDBs.
 
-- replica counts,
-- image tags,
-- ingress hosts,
-- resource requests and limits,
-- secret references,
-- monitoring labels.
+Render:
+
+```bash
+kubectl kustomize k8s/overlays/dev
+kubectl kustomize k8s/overlays/prod
+```

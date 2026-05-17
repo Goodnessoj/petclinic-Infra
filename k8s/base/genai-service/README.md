@@ -1,8 +1,9 @@
 # GenAI Service Raw Manifests
 
-This folder is reserved for raw Kubernetes manifests for `genai-service`.
+This folder contains the raw Kubernetes Deployment and Service for
+`genai-service`.
 
-The current YAML files are empty. The active deployment is the
+The active deployment is still the
 `genai-service-dev` or `genai-service-prod` Argo CD Application, which renders
 `helm/petclinic-service` with `helm-values/genai-service.yaml`.
 

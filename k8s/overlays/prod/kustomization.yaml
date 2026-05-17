@@ -1,0 +1,87 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+  - hpa.yaml
+  - pdb.yaml
+
+namespace: petclinic-prod
+
+labels:
+  - pairs:
+      petclinic.io/environment: prod
+    includeSelectors: true
+
+images:
+  - name: petclinic/config-server
+    newName: 974263620909.dkr.ecr.us-east-2.amazonaws.com/petclinic-prod-config-server
+    newTag: latest
+  - name: petclinic/discovery-server
+    newName: 974263620909.dkr.ecr.us-east-2.amazonaws.com/petclinic-prod-discovery-server
+    newTag: latest
+  - name: petclinic/customers-service
+    newName: 974263620909.dkr.ecr.us-east-2.amazonaws.com/petclinic-prod-customers-service
+    newTag: latest
+  - name: petclinic/visits-service
+    newName: 974263620909.dkr.ecr.us-east-2.amazonaws.com/petclinic-prod-visits-service
+    newTag: latest
+  - name: petclinic/vets-service
+    newName: 974263620909.dkr.ecr.us-east-2.amazonaws.com/petclinic-prod-vets-service
+    newTag: latest
+  - name: petclinic/genai-service
+    newName: 974263620909.dkr.ecr.us-east-2.amazonaws.com/petclinic-prod-genai-service
+    newTag: latest
+  - name: petclinic/api-gateway
+    newName: 974263620909.dkr.ecr.us-east-2.amazonaws.com/petclinic-prod-api-gateway
+    newTag: latest
+  - name: petclinic/admin-server
+    newName: 974263620909.dkr.ecr.us-east-2.amazonaws.com/petclinic-prod-admin-server
+    newTag: latest
+
+patches:
+  - target:
+      kind: Namespace
+      name: petclinic
+    patch: |-
+      - op: replace
+        path: /metadata/name
+        value: petclinic-prod
+  - target:
+      kind: Deployment
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            cpu: "1"
+            memory: 1Gi
+  - target:
+      kind: ExternalSecret
+      name: petclinic-db-secret
+    patch: |-
+      - op: replace
+        path: /spec/data/0/remoteRef/key
+        value: petclinic/prod/terraform/database
+      - op: replace
+        path: /spec/data/1/remoteRef/key
+        value: petclinic/prod/terraform/database
+      - op: replace
+        path: /spec/data/2/remoteRef/key
+        value: petclinic/prod/terraform/database
+      - op: replace
+        path: /spec/data/3/remoteRef/key
+        value: petclinic/prod/terraform/database
+  - target:
+      kind: ExternalSecret
+      name: petclinic-openai-secret
+    patch: |-
+      - op: replace
+        path: /spec/data/0/remoteRef/key
+        value: petclinic/prod/terraform/openai-api-key

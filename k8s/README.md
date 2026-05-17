@@ -8,8 +8,8 @@ platform.
 | Path | Purpose |
 | --- | --- |
 | [`argocd`](argocd/README.md) | Active GitOps configuration for Argo CD installation fallback and service Applications. |
-| [`base`](base/README.md) | Placeholder raw Kubernetes manifest structure. The files are currently empty and are not the active deployment path. |
-| [`overlays`](overlays/README.md) | Placeholder Kustomize overlay structure for future raw-manifest overlays. |
+| [`base`](base/README.md) | Raw Kubernetes reference manifests for the eight services and shared secrets. |
+| [`overlays`](overlays/README.md) | Dev and prod Kustomize overlays for the raw manifests. |
 
 ## Active Deployment Path
 
@@ -22,6 +22,26 @@ k8s/argocd/applications -> helm/petclinic-service -> helm-values
 Terraform installs Argo CD through the `addons` module. Argo CD then renders the
 service Helm chart once per service using the environment and service values
 files.
+
+## Raw Manifest Reference
+
+Before the deployment moved to Helm, the service shape was captured as raw
+Kubernetes manifests:
+
+```text
+k8s/base -> k8s/overlays/dev
+k8s/base -> k8s/overlays/prod
+```
+
+Render them for review with:
+
+```bash
+kubectl kustomize k8s/overlays/dev
+kubectl kustomize k8s/overlays/prod
+```
+
+Do not apply the raw overlays to the same namespaces while Argo CD is managing
+the Helm releases.
 
 ## Manual Dev Apply
 
