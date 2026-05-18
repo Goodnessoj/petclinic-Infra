@@ -45,6 +45,11 @@ on:
         required: true
         type: boolean
         default: true
+      force_destroy_cleanup:
+        description: Force cleanup leftover Kubernetes finalizers and cluster ALBs during destroy.
+        required: true
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -75,6 +80,7 @@ env:
   TF_VAR_github_actions_role_arn: ${{ secrets.AWS_ROLE_ARN || secrets.AWS_ROLE_TO_ASSUME || vars.AWS_ROLE_ARN || '' }}
   TF_VAR_argocd_repo_url: https://github.com/Goodnessoj/petclinic-Infra.git
   TF_VAR_argocd_repo_token: ${{ secrets.ARGOCD_REPO_TOKEN || '' }}
+  FORCE_DESTROY_CLEANUP: ${{ github.event.inputs.force_destroy_cleanup || 'false' }}
 
 jobs:
   platform:
@@ -140,6 +146,7 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
 
       - name: Set up kubectl
         if: steps.mode.outputs.action == 'destroy' || (steps.mode.outputs.action == 'apply' && steps.mode.outputs.bootstrap_gitops == 'true')
@@ -326,10 +333,62 @@ jobs:
         run: |
           set -euo pipefail
 
-          CLUSTER_NAME="$(terraform -chdir="$TF_WORKING_DIR" output -raw eks_cluster_name 2>/dev/null || true)"
-          APP_NAMESPACE="$(terraform -chdir="$TF_WORKING_DIR" output -raw application_namespace 2>/dev/null || true)"
-          ACM_CERTIFICATE_ARN="$(terraform -chdir="$TF_WORKING_DIR" output -raw acm_certificate_arn 2>/dev/null || true)"
-          ZIPKIN_ACM_CERTIFICATE_ARN="$(terraform -chdir="$TF_WORKING_DIR" output -raw zipkin_acm_certificate_arn 2>/dev/null || true)"
+          safe_env() {
+            local name="$1"
+            local value="${2:-}"
+
+            value="${value//$'\r'/}"
+            value="$(printf '%s\n' "$value" | sed -n '1p')"
+
+            case "$value" in
+              *"Warning:"*|*"No outputs found"*|*"│"*)
+                value=""
+                ;;
+            esac
+
+            printf '%s=%s\n' "$name" "$value" >> "$GITHUB_ENV"
+          }
+
+          TF_OUTPUT_JSON="$(terraform -chdir="$TF_WORKING_DIR" output -json 2>/dev/null || true)"
+          if ! printf '%s' "$TF_OUTPUT_JSON" | jq empty >/dev/null 2>&1; then
+            TF_OUTPUT_JSON="{}"
+          fi
+
+          TF_STATE_JSON="$(terraform -chdir="$TF_WORKING_DIR" state pull 2>/dev/null || true)"
+          if ! printf '%s' "$TF_STATE_JSON" | jq empty >/dev/null 2>&1; then
+            TF_STATE_JSON="{}"
+          fi
+
+          tf_output_value() {
+            local name="$1"
+
+            printf '%s' "$TF_OUTPUT_JSON" | jq -r --arg name "$name" \
+              '.[$name].value // empty' 2>/dev/null | sed -n '1p'
+          }
+
+          state_acm_certificate_arn() {
+            local module_regex="$1"
+
+            printf '%s' "$TF_STATE_JSON" | jq -r --arg module_regex "$module_regex" '
+              .resources[]?
+              | select(.type == "aws_acm_certificate" and .name == "main")
+              | select(((.module // "") | test($module_regex)))
+              | .instances[]?.attributes.arn // empty
+            ' 2>/dev/null | sed -n '1p'
+          }
+
+          CLUSTER_NAME="$(tf_output_value eks_cluster_name)"
+          APP_NAMESPACE="$(tf_output_value application_namespace)"
+          ACM_CERTIFICATE_ARN="$(tf_output_value acm_certificate_arn)"
+          ZIPKIN_ACM_CERTIFICATE_ARN="$(tf_output_value zipkin_acm_certificate_arn)"
+
+          if [ -z "$ACM_CERTIFICATE_ARN" ]; then
+            ACM_CERTIFICATE_ARN="$(state_acm_certificate_arn '^module\.dns_ingress(\[0\])?$')"
+          fi
+
+          if [ -z "$ZIPKIN_ACM_CERTIFICATE_ARN" ]; then
+            ZIPKIN_ACM_CERTIFICATE_ARN="$(state_acm_certificate_arn '^module\.zipkin_dns_ingress(\[0\])?$')"
+          fi
 
           if [ -z "$CLUSTER_NAME" ]; then
             CLUSTER_NAME="$DEFAULT_CLUSTER_NAME"
@@ -339,10 +398,10 @@ jobs:
             APP_NAMESPACE="$DEFAULT_APP_NAMESPACE"
           fi
 
-          echo "CLUSTER_NAME=$CLUSTER_NAME" >> "$GITHUB_ENV"
-          echo "APP_NAMESPACE=$APP_NAMESPACE" >> "$GITHUB_ENV"
-          echo "ACM_CERTIFICATE_ARN=$ACM_CERTIFICATE_ARN" >> "$GITHUB_ENV"
-          echo "ZIPKIN_ACM_CERTIFICATE_ARN=$ZIPKIN_ACM_CERTIFICATE_ARN" >> "$GITHUB_ENV"
+          safe_env CLUSTER_NAME "$CLUSTER_NAME"
+          safe_env APP_NAMESPACE "$APP_NAMESPACE"
+          safe_env ACM_CERTIFICATE_ARN "$ACM_CERTIFICATE_ARN"
+          safe_env ZIPKIN_ACM_CERTIFICATE_ARN "$ZIPKIN_ACM_CERTIFICATE_ARN"
 
       - name: Update kubeconfig for destroy cleanup
         if: github.event_name == 'workflow_dispatch' && steps.mode.outputs.action == 'destroy'
@@ -416,6 +475,19 @@ jobs:
                 --ignore-not-found \
                 --wait=true \
                 --timeout=10m || true
+
+              if [ "${FORCE_DESTROY_CLEANUP:-false}" = "true" ]; then
+                while read -r INGRESS_NAME; do
+                  if [ -n "${INGRESS_NAME:-}" ]; then
+                    kubectl patch ingress "$INGRESS_NAME" \
+                      --namespace "$NAMESPACE" \
+                      --type=json \
+                      -p='[{"op":"remove","path":"/metadata/finalizers"}]' || true
+                  fi
+                done < <(kubectl get ingress \
+                  --namespace "$NAMESPACE" \
+                  -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null || true)
+              fi
             fi
           done
 
@@ -504,6 +576,82 @@ jobs:
           fi
 
           terraform -chdir="$TF_WORKING_DIR" destroy "${DESTROY_ARGS[@]}" "${TARGET_ARGS[@]}"
+
+      - name: Force-delete leftover load balancers
+        if: github.event_name == 'workflow_dispatch' && steps.mode.outputs.action == 'destroy' && github.event.inputs.force_destroy_cleanup != 'false'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          LOAD_BALANCER_ARNS=()
+
+          add_load_balancer_arn() {
+            local arn="${1:-}"
+
+            if [ -n "$arn" ]; then
+              LOAD_BALANCER_ARNS+=("$arn")
+            fi
+          }
+
+          add_in_use_load_balancers() {
+            local certificate_arn="${1:-}"
+
+            if [ -z "$certificate_arn" ]; then
+              return 0
+            fi
+
+            while read -r in_use_arn; do
+              if [ -z "${in_use_arn:-}" ]; then
+                continue
+              fi
+
+              if [[ "$in_use_arn" == *":loadbalancer/"* ]]; then
+                add_load_balancer_arn "$in_use_arn"
+              elif [[ "$in_use_arn" == *":listener/"* ]]; then
+                add_load_balancer_arn "$(printf '%s' "$in_use_arn" | sed -E 's#:listener/(app|net)/([^/]+/[^/]+)/[^/]+$#:loadbalancer/\1/\2#')"
+              else
+                echo "ACM certificate is still used by a non-ELB resource: $in_use_arn"
+              fi
+            done < <(aws acm describe-certificate \
+              --region "$AWS_REGION" \
+              --certificate-arn "$certificate_arn" \
+              --query 'Certificate.InUseBy[]' \
+              --output text 2>/dev/null | tr '\t' '\n' || true)
+          }
+
+          add_in_use_load_balancers "${ACM_CERTIFICATE_ARN:-}"
+          add_in_use_load_balancers "${ZIPKIN_ACM_CERTIFICATE_ARN:-}"
+
+          while read -r cluster_lb_arn; do
+            add_load_balancer_arn "$cluster_lb_arn"
+          done < <(aws resourcegroupstaggingapi get-resources \
+            --region "$AWS_REGION" \
+            --resource-type-filters elasticloadbalancing:loadbalancer \
+            --tag-filters "Key=elbv2.k8s.aws/cluster,Values=$CLUSTER_NAME" \
+            --query 'ResourceTagMappingList[].ResourceARN' \
+            --output text 2>/dev/null | tr '\t' '\n' || true)
+
+          if [ "${#LOAD_BALANCER_ARNS[@]}" -eq 0 ]; then
+            echo "No leftover load balancers found for force cleanup."
+            exit 0
+          fi
+
+          printf '%s\n' "${LOAD_BALANCER_ARNS[@]}" | sort -u | while read -r load_balancer_arn; do
+            if [ -n "$load_balancer_arn" ]; then
+              echo "Force deleting load balancer: $load_balancer_arn"
+              aws elbv2 delete-load-balancer \
+                --region "$AWS_REGION" \
+                --load-balancer-arn "$load_balancer_arn" || true
+            fi
+          done
+
+          printf '%s\n' "${LOAD_BALANCER_ARNS[@]}" | sort -u | while read -r load_balancer_arn; do
+            if [ -n "$load_balancer_arn" ]; then
+              aws elbv2 wait load-balancers-deleted \
+                --region "$AWS_REGION" \
+                --load-balancer-arns "$load_balancer_arn" || true
+            fi
+          done
 
       - name: Wait for ACM certificates to detach
         if: github.event_name == 'workflow_dispatch' && steps.mode.outputs.action == 'destroy'

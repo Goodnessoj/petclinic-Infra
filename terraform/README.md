@@ -79,7 +79,8 @@ tokens during long apply and destroy runs.
 For destroy runs, prefer the platform workflow. It previews destroy without a
 saved plan, removes GitOps Applications, ingresses, stale ExternalSecret
 finalizers, and TargetGroupBindings, destroys Terraform-managed platform
-ingress/DNS resources first, waits for ACM certificates to detach from ALB
-listeners, then runs a fresh Terraform destroy for the rest of the environment.
+ingress/DNS resources first, optionally force-deletes leftover cluster ALBs,
+waits for ACM certificates to detach from ALB listeners, then runs a fresh
+Terraform destroy for the rest of the environment.
 
 The `platform.yaml` workflow automates this flow for the selected environment.

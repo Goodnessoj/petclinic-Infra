@@ -12,8 +12,9 @@ the platform.
   cluster grants the workflow role cluster-admin access through EKS access
   entries. Destroy runs also set up kubectl, remove GitOps-owned Applications,
   ExternalSecrets, ingresses, and TargetGroupBindings, destroy
-  Terraform-managed platform ingress/DNS resources first, then wait for all ACM
-  certificates to detach before running a fresh Terraform destroy.
+  Terraform-managed platform ingress/DNS resources first, optionally force-delete
+  leftover cluster ALBs, then wait for all ACM certificates to detach before
+  running a fresh Terraform destroy.
 - `deploy-argocd.yml`: installs Argo CD, applies Argo CD RBAC, applies the
   Petclinic AppProject and Applications, then optionally waits for health.
 - `update-image-tags.yml`: listens for `repository_dispatch` events from the
