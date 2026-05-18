@@ -138,9 +138,19 @@ output "prometheus_domain_name" {
   value       = var.enable_dns_ingress ? local.prometheus_domain_name : null
 }
 
+output "zipkin_domain_name" {
+  description = "Zipkin UI domain name."
+  value       = var.enable_dns_ingress ? local.zipkin_domain_name : null
+}
+
 output "acm_certificate_arn" {
   description = "Validated ACM certificate ARN."
   value       = try(module.dns_ingress[0].acm_certificate_arn, null)
+}
+
+output "zipkin_acm_certificate_arn" {
+  description = "Validated ACM certificate ARN for Zipkin."
+  value       = try(module.zipkin_dns_ingress[0].acm_certificate_arn, null)
 }
 
 output "acm_certificate_validation_id" {

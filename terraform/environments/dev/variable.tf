@@ -179,6 +179,12 @@ variable "prometheus_subdomain" {
   default     = "prometheus"
 }
 
+variable "zipkin_subdomain" {
+  description = "Zipkin UI subdomain under the root domain."
+  type        = string
+  default     = "zipkin"
+}
+
 variable "grafana_service_type" {
   description = "Grafana Kubernetes service type for kube-prometheus-stack."
   type        = string

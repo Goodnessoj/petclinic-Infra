@@ -12,7 +12,7 @@ Kubernetes foundation used by the dev Petclinic services.
 - RDS MySQL instance and database credential secret in AWS Secrets Manager.
 - OpenAI and Grafana Secrets Manager entries through the `secrets` module.
 - Optional Route 53 and ACM resources for app, Argo CD, Grafana, Prometheus,
-  Eureka, and Discovery hostnames.
+  Zipkin, Eureka, and Discovery hostnames.
 - External Secrets Operator, AWS Load Balancer Controller, optional ExternalDNS,
   Argo CD, kube-prometheus-stack, Grafana, Loki, and related platform services.
 
@@ -84,7 +84,9 @@ kubectl get nodes
 - `argocd_domain_name`
 - `grafana_domain_name`
 - `prometheus_domain_name`
+- `zipkin_domain_name`
 - `app_domain_name`
+- `zipkin_acm_certificate_arn`
 
 ## Post-Apply Checks
 
@@ -106,14 +108,16 @@ https://discovery.phoniex.site
 https://argocd.phoniex.site
 https://grafana.phoniex.site
 https://prometheus.phoniex.site
+https://zipkin.phoniex.site
 ```
 
 ## Destroy And Reapply
 
 Keep `terraform/environments/bootstrap` in place. For routine dev teardown,
 prefer the platform workflow because it removes Argo CD Applications, ingresses,
-stale ExternalSecret finalizers, and TargetGroupBinding finalizers before
-Terraform deletes the ACM certificate and cluster.
+stale ExternalSecret finalizers, and TargetGroupBindings, destroys
+Terraform-managed platform ingress/DNS resources first, waits for ACM
+certificates to detach, then runs a fresh Terraform destroy.
 
 If a local apply or destroy reports `Failed to persist state to backend`, do not
 run apply again first. Restore the backend bucket if needed, then run:
