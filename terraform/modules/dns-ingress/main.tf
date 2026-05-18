@@ -6,7 +6,8 @@ data "aws_route53_zone" "main" {
 
 # Build the full app domain name
 locals {
-  app_domain_name = "${var.app_subdomain}.${var.root_domain_name}"
+  app_domain_name  = "${var.app_subdomain}.${var.root_domain_name}"
+  certificate_name = trimspace(var.certificate_name) != "" ? trimspace(var.certificate_name) : "petclinic-${var.environment}-acm"
   additional_domain_names = [
     for subdomain in var.additional_subdomains : "${subdomain}.${var.root_domain_name}"
   ]
@@ -23,7 +24,7 @@ resource "aws_acm_certificate" "main" {
   }
 
   tags = merge(var.tags, {
-    Name = "petclinic-${var.environment}-acm"
+    Name = local.certificate_name
   })
 }
 

@@ -17,7 +17,7 @@ This module installs Kubernetes platform add-ons into the EKS cluster.
 - Alertmanager service alias.
 - Loki deployment and service.
 - Fluent Bit log collection into Loki.
-- Zipkin deployment and service in the `tracing` namespace.
+- Zipkin deployment, service, optional ALB ingress, and Route 53 record.
 - Grafana datasource and Petclinic dashboard ConfigMaps.
 - Petclinic Prometheus alert rules.
 - Optional Argo CD repository credentials secret.
@@ -41,6 +41,7 @@ When platform ingress is enabled:
 - `argocd_hostname`
 - `grafana_hostname`
 - `prometheus_hostname`
+- `zipkin_hostname`
 - `platform_certificate_arn`
 - `platform_alb_group_name`
 - `platform_alb_name`
@@ -78,8 +79,22 @@ It also deploys a lightweight Loki instance and configures Grafana datasources
 for Prometheus and Loki. Fluent Bit tails Kubernetes container logs and sends
 them to Loki.
 
+Alertmanager is configured with a visible `petclinic-alerts` receiver for
+Petclinic application alerts. The receiver does not send external notifications
+until a real webhook, Slack, email, or pager integration is added, but alerts
+are grouped and visible in Alertmanager instead of being routed to `null`.
+
+The module manages five Petclinic alert rules:
+
+- `PetclinicHighErrorRate`: HTTP 5xx ratio above 5% for 5 minutes.
+- `PetclinicPodRestartLoop`: more than 5 restarts in 15 minutes.
+- `PetclinicHighMemoryUsage`: container memory above 80% of its limit.
+- `PetclinicServiceDown`: no successful Prometheus scrape for 2 minutes.
+- `PetclinicSlowP99ResponseTime`: P99 latency above 2 seconds for 5 minutes.
+
 The module also deploys Zipkin at `zipkin.tracing:9411`, which matches the
-tracing environment variables in the service values files.
+tracing environment variables in the service values files. When platform
+ingress is enabled, the Zipkin UI is also exposed through `zipkin_hostname`.
 
 ## Outputs
 
@@ -91,6 +106,7 @@ tracing environment variables in the service values files.
 - `argocd_hostname`
 - `grafana_hostname`
 - `prometheus_hostname`
+- `zipkin_hostname`
 - `application_namespace`
 
 ## Destroy Behavior
@@ -98,8 +114,9 @@ tracing environment variables in the service values files.
 The application namespace depends on External Secrets Operator so Terraform
 destroys application ExternalSecret resources before uninstalling the controller.
 The platform workflow also removes GitOps Applications, ingresses, stale
-ExternalSecret finalizers, and TargetGroupBinding finalizers before Terraform
-destroys the cluster.
+ExternalSecret finalizers, and TargetGroupBindings before Terraform destroys the
+cluster. It also waits for platform ACM certificates to detach from ALB listeners
+so certificate deletion does not race the AWS Load Balancer Controller cleanup.
 
 ## Verification
 
@@ -109,4 +126,8 @@ kubectl get clustersecretstore aws-secrets-manager
 kubectl get pods -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller
 kubectl get pods -n argocd
 kubectl get pods -n monitoring
+kubectl get prometheusrule -n monitoring petclinic-alert-rules
+kubectl get --raw /api/v1/namespaces/monitoring/services/http:prometheus:9090/proxy/api/v1/rules
+kubectl get --raw /api/v1/namespaces/monitoring/services/http:alertmanager:9093/proxy/api/v2/status
+kubectl get --raw /api/v1/namespaces/monitoring/services/http:alertmanager:9093/proxy/api/v2/alerts
 ```

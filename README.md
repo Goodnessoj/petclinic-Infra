@@ -151,6 +151,16 @@ https://discovery.phoniex.site
 https://argocd.phoniex.site
 https://grafana.phoniex.site
 https://prometheus.phoniex.site
+https://zipkin.phoniex.site
+```
+
+Verify alerting without port-forwarding:
+
+```bash
+kubectl get prometheusrule -n monitoring petclinic-alert-rules
+kubectl get --raw /api/v1/namespaces/monitoring/services/http:prometheus:9090/proxy/api/v1/rules
+kubectl get --raw /api/v1/namespaces/monitoring/services/http:alertmanager:9093/proxy/api/v2/status
+kubectl get --raw /api/v1/namespaces/monitoring/services/http:alertmanager:9093/proxy/api/v2/alerts
 ```
 
 ## Safety Notes

@@ -8,6 +8,7 @@ locals {
   argocd_domain_name     = "${var.argocd_subdomain}.${var.root_domain_name}"
   grafana_domain_name    = "${var.grafana_subdomain}.${var.root_domain_name}"
   prometheus_domain_name = "${var.prometheus_subdomain}.${var.root_domain_name}"
+  zipkin_domain_name     = "${var.zipkin_subdomain}.${var.root_domain_name}"
   github_actions_role_arn = trimspace(var.github_actions_role_arn) != "" ? trimspace(var.github_actions_role_arn) : (
     "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:role/${var.github_actions_role_name}"
   )
@@ -107,6 +108,22 @@ module "dns_ingress" {
   tags                   = local.common_tags
 }
 
+module "zipkin_dns_ingress" {
+  count = var.enable_dns_ingress ? 1 : 0
+
+  source = "../../modules/dns-ingress"
+
+  environment            = var.environment
+  root_domain_name       = var.root_domain_name
+  app_subdomain          = var.zipkin_subdomain
+  certificate_name       = "${local.name_prefix}-zipkin-acm"
+  aws_region             = var.aws_region
+  cluster_name           = module.eks.cluster_name
+  cluster_endpoint       = module.eks.cluster_endpoint
+  cluster_ca_certificate = module.eks.cluster_certificate_authority_data
+  tags                   = local.common_tags
+}
+
 module "addons" {
   source = "../../modules/addons"
 
@@ -126,7 +143,9 @@ module "addons" {
   argocd_hostname                       = local.argocd_domain_name
   grafana_hostname                      = local.grafana_domain_name
   prometheus_hostname                   = local.prometheus_domain_name
+  zipkin_hostname                       = local.zipkin_domain_name
   platform_certificate_arn              = try(module.dns_ingress[0].acm_certificate_arn, "")
+  zipkin_certificate_arn                = try(module.zipkin_dns_ingress[0].acm_certificate_arn, "")
   platform_alb_group_name               = "${local.name_prefix}-platform"
   platform_alb_name                     = "${local.name_prefix}-platform"
   argocd_repo_url                       = var.argocd_repo_url

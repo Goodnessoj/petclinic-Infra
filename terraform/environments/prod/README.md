@@ -78,6 +78,8 @@ terraform -chdir=terraform/environments/prod apply -var-file=terraform.tfvars
 - `argocd_domain_name`
 - `grafana_domain_name`
 - `prometheus_domain_name`
+- `zipkin_domain_name`
+- `zipkin_acm_certificate_arn`
 
 ## Post-Apply Checks
 
@@ -96,4 +98,5 @@ https://petclinic-prod.phoniex.site
 https://argocd-prod.phoniex.site
 https://grafana-prod.phoniex.site
 https://prometheus-prod.phoniex.site
+https://zipkin-prod.phoniex.site
 ```

@@ -51,6 +51,14 @@ spec:
               value: docker
             - name: CONFIG_SERVER_URL
               value: http://config-server:8888/
+            - name: MANAGEMENT_TRACING_EXPORT_ZIPKIN_ENDPOINT
+              value: http://zipkin.tracing:9411/api/v2/spans
+            - name: MANAGEMENT_ZIPKIN_TRACING_ENDPOINT
+              value: http://zipkin.tracing:9411/api/v2/spans
+            - name: MANAGEMENT_TRACING_SAMPLING_PROBABILITY
+              value: "1.0"
+            - name: MANAGEMENT_METRICS_DISTRIBUTION_PERCENTILESHISTOGRAM_HTTP_SERVER_REQUESTS
+              value: "true"
           startupProbe:
             httpGet:
               path: /actuator/health

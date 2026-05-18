@@ -38,6 +38,11 @@ output "prometheus_hostname" {
   value       = var.enable_platform_ingress ? var.prometheus_hostname : null
 }
 
+output "zipkin_hostname" {
+  description = "External Zipkin hostname."
+  value       = var.enable_platform_ingress ? var.zipkin_hostname : null
+}
+
 output "application_namespace" {
   description = "Namespace where the Petclinic application is deployed."
   value       = kubernetes_namespace_v1.application.metadata[0].name

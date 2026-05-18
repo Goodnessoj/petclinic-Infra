@@ -41,6 +41,9 @@ Some files intentionally contain dev public ingress hosts for the current dev
 deployment. Prod Applications should override or disable those ingress values
 before exposing production traffic.
 
+All eight service values enable `monitoring.podMonitor.enabled` so Prometheus
+can scrape `/actuator/prometheus` and evaluate the Petclinic alert rules.
+
 ## Image Tag Updates
 
 The `update-image-tags.yml` workflow updates service values files when the

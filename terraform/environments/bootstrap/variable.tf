@@ -81,3 +81,9 @@ variable "terraform_state_kms_key_arn" {
   type        = string
   default     = ""
 }
+
+variable "state_bucket_guardrail_exempt_principal_arns" {
+  description = "Additional break-glass principal ARNs allowed to delete the Terraform state bucket or state object versions."
+  type        = list(string)
+  default     = []
+}

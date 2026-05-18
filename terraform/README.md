@@ -76,8 +76,10 @@ tokens during long apply and destroy runs.
 3. Use Terraform outputs to update kubeconfig or let GitHub Actions do it.
 4. Bootstrap or refresh Argo CD applications.
 
-For destroy runs, prefer the platform workflow. It removes GitOps Applications,
-ingresses, stale ExternalSecret finalizers, and TargetGroupBinding finalizers
-before Terraform deletes the EKS cluster, ACM certificate, and VPC.
+For destroy runs, prefer the platform workflow. It previews destroy without a
+saved plan, removes GitOps Applications, ingresses, stale ExternalSecret
+finalizers, and TargetGroupBindings, destroys Terraform-managed platform
+ingress/DNS resources first, waits for ACM certificates to detach from ALB
+listeners, then runs a fresh Terraform destroy for the rest of the environment.
 
 The `platform.yaml` workflow automates this flow for the selected environment.

@@ -306,7 +306,6 @@ jobs:
             -input=false
             -no-color
             -lock-timeout=5m
-            -out=tfplan
           )
 
           if [ -f "$TF_WORKING_DIR/$TF_VARS_FILE" ]; then
@@ -318,7 +317,7 @@ jobs:
           if [ "${{ steps.mode.outputs.action }}" = "destroy" ]; then
             terraform -chdir="$TF_WORKING_DIR" plan -destroy "${PLAN_ARGS[@]}"
           else
-            terraform -chdir="$TF_WORKING_DIR" plan "${PLAN_ARGS[@]}"
+            terraform -chdir="$TF_WORKING_DIR" plan "${PLAN_ARGS[@]}" -out=tfplan
           fi
 
       - name: Export destroy Kubernetes context
@@ -330,6 +329,7 @@ jobs:
           CLUSTER_NAME="$(terraform -chdir="$TF_WORKING_DIR" output -raw eks_cluster_name 2>/dev/null || true)"
           APP_NAMESPACE="$(terraform -chdir="$TF_WORKING_DIR" output -raw application_namespace 2>/dev/null || true)"
           ACM_CERTIFICATE_ARN="$(terraform -chdir="$TF_WORKING_DIR" output -raw acm_certificate_arn 2>/dev/null || true)"
+          ZIPKIN_ACM_CERTIFICATE_ARN="$(terraform -chdir="$TF_WORKING_DIR" output -raw zipkin_acm_certificate_arn 2>/dev/null || true)"
 
           if [ -z "$CLUSTER_NAME" ]; then
             CLUSTER_NAME="$DEFAULT_CLUSTER_NAME"
@@ -342,6 +342,7 @@ jobs:
           echo "CLUSTER_NAME=$CLUSTER_NAME" >> "$GITHUB_ENV"
           echo "APP_NAMESPACE=$APP_NAMESPACE" >> "$GITHUB_ENV"
           echo "ACM_CERTIFICATE_ARN=$ACM_CERTIFICATE_ARN" >> "$GITHUB_ENV"
+          echo "ZIPKIN_ACM_CERTIFICATE_ARN=$ZIPKIN_ACM_CERTIFICATE_ARN" >> "$GITHUB_ENV"
 
       - name: Update kubeconfig for destroy cleanup
         if: github.event_name == 'workflow_dispatch' && steps.mode.outputs.action == 'destroy'
@@ -362,7 +363,7 @@ jobs:
 
           kubectl config current-context
 
-      - name: Remove GitOps ingresses before destroy
+      - name: Pre-clean Kubernetes resources before destroy
         if: github.event_name == 'workflow_dispatch' && steps.mode.outputs.action == 'destroy'
         shell: bash
         run: |
@@ -408,7 +409,7 @@ jobs:
             done
           fi
 
-          for NAMESPACE in "$APP_NAMESPACE" "$ARGOCD_NAMESPACE" monitoring; do
+          for NAMESPACE in "$APP_NAMESPACE" "$ARGOCD_NAMESPACE" monitoring tracing; do
             if kubectl get namespace "$NAMESPACE" >/dev/null 2>&1; then
               kubectl delete ingress --all \
                 --namespace "$NAMESPACE" \
@@ -418,44 +419,154 @@ jobs:
             fi
           done
 
-          if kubectl get crd targetgroupbindings.elbv2.k8s.aws >/dev/null 2>&1 && \
-             kubectl get namespace "$APP_NAMESPACE" >/dev/null 2>&1; then
-            for TARGET_GROUP_BINDING in $(kubectl get targetgroupbinding \
-              --namespace "$APP_NAMESPACE" \
-              -o name 2>/dev/null || true); do
-              kubectl patch "$TARGET_GROUP_BINDING" \
-                --namespace "$APP_NAMESPACE" \
-                --type=json \
-                -p='[{"op":"remove","path":"/metadata/finalizers"}]' || true
-            done
-          fi
+          if kubectl get crd targetgroupbindings.elbv2.k8s.aws >/dev/null 2>&1; then
+            kubectl delete targetgroupbinding --all \
+              --all-namespaces \
+              --ignore-not-found \
+              --wait=false || true
 
-          if [ -n "${ACM_CERTIFICATE_ARN:-}" ]; then
+            while read -r TGB_NAMESPACE TGB_NAME; do
+              if [ -n "${TGB_NAMESPACE:-}" ] && [ -n "${TGB_NAME:-}" ]; then
+                kubectl patch targetgroupbinding "$TGB_NAME" \
+                  --namespace "$TGB_NAMESPACE" \
+                  --type=json \
+                  -p='[{"op":"remove","path":"/metadata/finalizers"}]' || true
+              fi
+            done < <(kubectl get targetgroupbinding \
+              --all-namespaces \
+              -o jsonpath='{range .items[*]}{.metadata.namespace}{" "}{.metadata.name}{"\n"}{end}' 2>/dev/null || true)
+
             for _ in $(seq 1 60); do
-              IN_USE_COUNT="$(aws acm describe-certificate \
-                --region "$AWS_REGION" \
-                --certificate-arn "$ACM_CERTIFICATE_ARN" \
-                --query 'length(Certificate.InUseBy)' \
-                --output text 2>/dev/null || echo 0)"
+              REMAINING_TARGET_GROUP_BINDINGS="$(kubectl get targetgroupbinding \
+                --all-namespaces \
+                --no-headers 2>/dev/null | wc -l | tr -d ' ')"
 
-              if [ "$IN_USE_COUNT" = "0" ]; then
-                echo "ACM certificate is no longer attached to load balancers."
-                exit 0
+              if [ "$REMAINING_TARGET_GROUP_BINDINGS" = "0" ]; then
+                echo "All TargetGroupBindings have been removed."
+                break
               fi
 
-              echo "Waiting for ACM certificate to detach from $IN_USE_COUNT load balancer listener(s)..."
+              echo "Waiting for $REMAINING_TARGET_GROUP_BINDINGS TargetGroupBinding resource(s) to disappear..."
               sleep 10
             done
 
-            aws acm describe-certificate \
-              --region "$AWS_REGION" \
-              --certificate-arn "$ACM_CERTIFICATE_ARN" \
-              --query 'Certificate.InUseBy' \
-              --output text || true
+            REMAINING_TARGET_GROUP_BINDINGS="$(kubectl get targetgroupbinding \
+              --all-namespaces \
+              --no-headers 2>/dev/null | wc -l | tr -d ' ')"
 
-            echo "Timed out waiting for ACM certificate detach." >&2
-            exit 1
+            if [ "$REMAINING_TARGET_GROUP_BINDINGS" != "0" ]; then
+              kubectl get targetgroupbinding --all-namespaces -o wide || true
+              echo "Timed out waiting for TargetGroupBindings to disappear." >&2
+              exit 1
+            fi
           fi
+
+          echo "Kubernetes pre-destroy cleanup completed."
+
+      - name: Destroy Terraform-managed ingresses first
+        if: github.event_name == 'workflow_dispatch' && steps.mode.outputs.action == 'destroy'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          DESTROY_ARGS=(
+            -input=false
+            -auto-approve
+            -lock-timeout=5m
+          )
+
+          if [ -f "$TF_WORKING_DIR/$TF_VARS_FILE" ]; then
+            DESTROY_ARGS+=(-var-file="$TF_VARS_FILE")
+          fi
+
+          STATE_LIST="$(terraform -chdir="$TF_WORKING_DIR" state list 2>/dev/null || true)"
+          TARGET_ARGS=()
+          TARGET_CANDIDATES=(
+            "module.addons.kubernetes_ingress_v1.argocd[0]"
+            "module.addons.kubernetes_ingress_v1.grafana[0]"
+            "module.addons.kubernetes_ingress_v1.prometheus[0]"
+            "module.addons.kubernetes_ingress_v1.zipkin[0]"
+            "module.addons.aws_route53_record.argocd[0]"
+            "module.addons.aws_route53_record.grafana[0]"
+            "module.addons.aws_route53_record.prometheus[0]"
+            "module.addons.aws_route53_record.zipkin[0]"
+          )
+
+          for ADDRESS in "${TARGET_CANDIDATES[@]}"; do
+            if printf '%s\n' "$STATE_LIST" | grep -Fxq "$ADDRESS"; then
+              TARGET_ARGS+=(-target="$ADDRESS")
+            fi
+          done
+
+          if [ "${#TARGET_ARGS[@]}" -eq 0 ]; then
+            echo "No Terraform-managed platform ingress or DNS alias resources found in state."
+            exit 0
+          fi
+
+          terraform -chdir="$TF_WORKING_DIR" destroy "${DESTROY_ARGS[@]}" "${TARGET_ARGS[@]}"
+
+      - name: Wait for ACM certificates to detach
+        if: github.event_name == 'workflow_dispatch' && steps.mode.outputs.action == 'destroy'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          CERTIFICATE_ARNS=()
+
+          if [ -n "${ACM_CERTIFICATE_ARN:-}" ]; then
+            CERTIFICATE_ARNS+=("$ACM_CERTIFICATE_ARN")
+          fi
+
+          if [ -n "${ZIPKIN_ACM_CERTIFICATE_ARN:-}" ]; then
+            CERTIFICATE_ARNS+=("$ZIPKIN_ACM_CERTIFICATE_ARN")
+          fi
+
+          if [ "${#CERTIFICATE_ARNS[@]}" -eq 0 ]; then
+            echo "No ACM certificate outputs found; skipping certificate detach wait."
+            exit 0
+          fi
+
+          for CERTIFICATE_ARN in "${CERTIFICATE_ARNS[@]}"; do
+            echo "Waiting for ACM certificate to detach: $CERTIFICATE_ARN"
+
+            for _ in $(seq 1 90); do
+              IN_USE_COUNT="$(aws acm describe-certificate \
+                --region "$AWS_REGION" \
+                --certificate-arn "$CERTIFICATE_ARN" \
+                --query 'length(Certificate.InUseBy)' \
+                --output text 2>/dev/null || echo MISSING)"
+
+              if [ "$IN_USE_COUNT" = "MISSING" ]; then
+                echo "ACM certificate is already gone or unavailable: $CERTIFICATE_ARN"
+                break
+              fi
+
+              if [ "$IN_USE_COUNT" = "0" ]; then
+                echo "ACM certificate is detached: $CERTIFICATE_ARN"
+                break
+              fi
+
+              echo "Waiting for $CERTIFICATE_ARN to detach from $IN_USE_COUNT load balancer listener(s)..."
+              sleep 10
+            done
+
+            IN_USE_COUNT="$(aws acm describe-certificate \
+              --region "$AWS_REGION" \
+              --certificate-arn "$CERTIFICATE_ARN" \
+              --query 'length(Certificate.InUseBy)' \
+              --output text 2>/dev/null || echo MISSING)"
+
+            if [ "$IN_USE_COUNT" != "0" ] && [ "$IN_USE_COUNT" != "MISSING" ]; then
+              aws acm describe-certificate \
+                --region "$AWS_REGION" \
+                --certificate-arn "$CERTIFICATE_ARN" \
+                --query 'Certificate.InUseBy' \
+                --output text || true
+
+              echo "Timed out waiting for ACM certificate detach: $CERTIFICATE_ARN" >&2
+              exit 1
+            fi
+          done
 
       - name: Terraform apply
         if: github.event_name == 'workflow_dispatch' && steps.mode.outputs.action == 'apply'
@@ -463,7 +574,21 @@ jobs:
 
       - name: Terraform destroy
         if: github.event_name == 'workflow_dispatch' && steps.mode.outputs.action == 'destroy'
-        run: terraform -chdir="$TF_WORKING_DIR" apply -input=false -auto-approve tfplan
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          DESTROY_ARGS=(
+            -input=false
+            -auto-approve
+            -lock-timeout=5m
+          )
+
+          if [ -f "$TF_WORKING_DIR/$TF_VARS_FILE" ]; then
+            DESTROY_ARGS+=(-var-file="$TF_VARS_FILE")
+          fi
+
+          terraform -chdir="$TF_WORKING_DIR" destroy "${DESTROY_ARGS[@]}"
 
       - name: Export Terraform outputs
         if: steps.mode.outputs.action == 'apply' && steps.mode.outputs.bootstrap_gitops == 'true'

@@ -20,6 +20,12 @@ variable "additional_subdomains" {
   default     = []
 }
 
+variable "certificate_name" {
+  description = "Name tag to apply to the ACM certificate."
+  type        = string
+  default     = ""
+}
+
 variable "aws_region" {
   description = "AWS region"
   type        = string

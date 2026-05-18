@@ -91,7 +91,7 @@ variable "grafana_service_type" {
 }
 
 variable "enable_platform_ingress" {
-  description = "Whether to expose ArgoCD, Grafana, and Prometheus through ALB ingresses."
+  description = "Whether to expose ArgoCD, Grafana, Prometheus, and Zipkin through ALB ingresses."
   type        = bool
   default     = false
 }
@@ -120,8 +120,20 @@ variable "prometheus_hostname" {
   default     = ""
 }
 
+variable "zipkin_hostname" {
+  description = "External hostname for the Zipkin UI."
+  type        = string
+  default     = ""
+}
+
 variable "platform_certificate_arn" {
   description = "ACM certificate ARN used by ArgoCD, Grafana, and Prometheus ALB ingresses."
+  type        = string
+  default     = ""
+}
+
+variable "zipkin_certificate_arn" {
+  description = "ACM certificate ARN used by the Zipkin ALB ingress. Defaults to the platform certificate when empty."
   type        = string
   default     = ""
 }

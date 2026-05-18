@@ -110,4 +110,5 @@ https://eureka.phoniex.site
 https://discovery.phoniex.site
 https://grafana.phoniex.site
 https://prometheus.phoniex.site
+https://zipkin.phoniex.site
 ```
