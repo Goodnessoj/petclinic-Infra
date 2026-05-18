@@ -116,8 +116,9 @@ https://zipkin.phoniex.site
 Keep `terraform/environments/bootstrap` in place. For routine dev teardown,
 prefer the platform workflow because it removes Argo CD Applications, ingresses,
 stale ExternalSecret finalizers, and TargetGroupBindings, destroys
-Terraform-managed platform ingress/DNS resources first, waits for ACM
-certificates to detach, then runs a fresh Terraform destroy.
+Terraform-managed platform ingress/DNS resources first, optionally force-deletes
+leftover cluster ALBs, waits for ACM certificates to detach, then runs a fresh
+Terraform destroy.
 
 If a local apply or destroy reports `Failed to persist state to backend`, do not
 run apply again first. Restore the backend bucket if needed, then run:
