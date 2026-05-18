@@ -1,7 +1,7 @@
 nameOverride: visits-service
 
 image:
-  tag: "e5ae608"
+  tag: "95e4d72"
   pullPolicy: IfNotPresent
 
 service:
