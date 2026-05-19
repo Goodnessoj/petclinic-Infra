@@ -1,7 +1,7 @@
 nameOverride: admin-server
 
 image:
-  tag: "119226e"
+  tag: "e4b6dbf"
   pullPolicy: IfNotPresent
 
 service:
