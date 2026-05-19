@@ -1,0 +1,255 @@
+Petclinic Infrastructure Presentation Phases
+
+Phase 1: Project Goal And Big Picture
+Goal:
+Explain what this project is trying to achieve.
+
+Description:
+This project takes the Spring Petclinic microservices application and builds a full cloud-native platform around it on AWS. The repository does not only deploy application code; it also provisions infrastructure, networking, Kubernetes, GitOps delivery, observability, DNS, secrets, and safe rebuild workflows.
+
+Slide message:
+"We moved Petclinic from a basic application deployment into a repeatable AWS EKS platform managed by Terraform, Helm, Argo CD, and GitHub Actions."
+
+
+Phase 2: Repository Organization
+Goal:
+Show how the repo is structured so the audience can follow the project.
+
+Description:
+The repository is split by responsibility:
+- .github contains CI/CD workflows.
+- terraform contains AWS infrastructure code.
+- helm contains reusable Helm charts.
+- helm-values contains environment and service-specific settings.
+- k8s contains the earlier raw Kubernetes manifests and the active Argo CD Application definitions.
+- scripts contains local helper scripts.
+
+Slide message:
+"Each folder owns one layer of the platform, which makes the project easier to reason about and maintain."
+
+
+Phase 3: Terraform Bootstrap Foundation
+Goal:
+Explain the durable foundation that should not be destroyed during normal rebuilds.
+
+Description:
+The bootstrap Terraform root creates the shared S3 remote state bucket and the GitHub Actions OIDC role. This gives Terraform a stable backend and lets GitHub Actions authenticate to AWS without long-lived AWS keys.
+
+Key components:
+- S3 Terraform state bucket.
+- GitHub Actions IAM role.
+- OIDC trust between GitHub and AWS.
+
+Slide message:
+"Before building the platform, we first create the foundation that lets automation safely manage AWS."
+
+
+Phase 4: AWS Platform Infrastructure
+Goal:
+Show the main AWS resources Terraform creates for each environment.
+
+Description:
+The dev and prod Terraform roots create the actual platform infrastructure. This includes the VPC, public subnets, EKS cluster, node group, ECR repositories, RDS MySQL database, Secrets Manager entries, DNS records, ACM certificates, and platform add-ons.
+
+Key components:
+- VPC and public subnets.
+- EKS cluster and managed nodes.
+- ECR repositories for service images.
+- RDS MySQL for application data.
+- AWS Secrets Manager for generated credentials.
+- Route 53 and ACM for public HTTPS endpoints.
+
+Slide message:
+"Terraform owns the cloud platform from networking up to Kubernetes add-ons."
+
+
+Phase 5: Kubernetes Runtime Platform
+Goal:
+Explain what runs inside the EKS cluster before application services are deployed.
+
+Description:
+Terraform installs the platform services required by the application. These include Argo CD for GitOps, AWS Load Balancer Controller for ALB ingress, External Secrets Operator for secret synchronization, kube-prometheus-stack for metrics, Grafana for dashboards, Loki and Fluent Bit for logs, and Zipkin for tracing.
+
+Key components:
+- Argo CD.
+- AWS Load Balancer Controller.
+- External Secrets Operator.
+- Prometheus, Alertmanager, and Grafana.
+- Loki and Fluent Bit.
+- Zipkin.
+
+Slide message:
+"EKS is not just a cluster; it is prepared with the controllers and tools needed to run, expose, observe, and operate the app."
+
+
+Phase 6: Application Packaging With Helm
+Goal:
+Explain how microservices are described for Kubernetes.
+
+Description:
+The active deployment path uses Helm charts instead of raw Kubernetes manifests. A reusable service chart defines common Kubernetes resources, while helm-values files customize each service and environment.
+
+Services:
+- config-server
+- discovery-server
+- customers-service
+- vets-service
+- visits-service
+- genai-service
+- api-gateway
+- admin-server
+
+Slide message:
+"Helm gives us one reusable deployment pattern for all Petclinic services, while values files handle service-specific differences."
+
+
+Phase 7: GitOps Deployment With Argo CD
+Goal:
+Explain how services are continuously deployed to Kubernetes.
+
+Description:
+Argo CD manages one Application per service. Each Application points back to this repository, reads the Helm chart and values files, and deploys the service into the target namespace. Dev applications sync automatically with prune and self-heal enabled, while prod applications are configured for manual sync.
+
+Key behavior:
+- One Argo CD Application per service.
+- Dev auto-syncs and self-heals.
+- Prod uses manual promotion.
+- Image tags are stored in helm-values files.
+
+Slide message:
+"Argo CD turns Git into the source of truth for Kubernetes deployments."
+
+
+Phase 8: CI/CD Automation With GitHub Actions
+Goal:
+Show how automation ties the platform together.
+
+Description:
+GitHub Actions manages Terraform plans, applies, destroys, Argo CD bootstrapping, service deployments, and image tag updates. The platform workflow can create or destroy the infrastructure, while the image tag workflow updates Helm values when new service images are built.
+
+Key workflows:
+- Platform workflow for Terraform plan, apply, and destroy.
+- Argo CD deployment workflow.
+- Image tag update workflow.
+- Direct service deployment workflow for selected Helm releases.
+
+Slide message:
+"GitHub Actions is the control plane for repeatable platform changes and service updates."
+
+
+Phase 9: Secrets And Runtime Configuration
+Goal:
+Explain how sensitive configuration is handled.
+
+Description:
+Database credentials are generated and stored in AWS Secrets Manager. External Secrets Operator reads those secrets and creates Kubernetes secrets inside the application namespace. The GenAI service also needs an OpenAI runtime secret, handled through GitHub secrets and Kubernetes secret creation during deployment.
+
+Key components:
+- AWS Secrets Manager.
+- External Secrets Operator.
+- ClusterSecretStore.
+- mysql-secret.
+- openai-secret.
+
+Slide message:
+"Secrets stay out of source code and are delivered to Kubernetes through controlled secret management."
+
+
+Phase 10: Public Access, DNS, And HTTPS
+Goal:
+Explain how users reach the platform.
+
+Description:
+The platform uses AWS Load Balancer Controller to create ALBs for application and platform endpoints. Route 53 provides DNS names, and ACM provides TLS certificates for HTTPS access.
+
+Dev endpoints:
+- https://petclinic.phoniex.site
+- https://petclinic.phoniex.site/admin
+- https://eureka.phoniex.site
+- https://discovery.phoniex.site
+- https://argocd.phoniex.site
+- https://grafana.phoniex.site
+- https://prometheus.phoniex.site
+- https://zipkin.phoniex.site
+
+Slide message:
+"The platform exposes the app and operations tools through friendly HTTPS DNS names."
+
+
+Phase 11: Observability And Alerting
+Goal:
+Show how the system is monitored and debugged.
+
+Description:
+The platform includes metrics, logs, traces, dashboards, and alert rules. Prometheus collects metrics, Grafana visualizes them, Loki stores logs, Fluent Bit ships logs, Zipkin shows distributed traces, and Alertmanager receives application alerts.
+
+Alert rules:
+- High error rate.
+- Pod restart loop.
+- High memory usage.
+- Service down.
+- Slow response time.
+
+Slide message:
+"The platform is observable across metrics, logs, traces, and alerts, so problems can be found quickly."
+
+
+Phase 12: Safe Destroy And Reapply Workflow
+Goal:
+Explain the rebuild problem and how the repo handles it.
+
+Description:
+Destroying Kubernetes-backed AWS infrastructure can fail if load balancers, target groups, certificates, network interfaces, or VPC resources are still attached. The platform workflow now destroys in sequence: it removes GitOps resources, deletes ingresses and TargetGroupBindings, waits for ACM certificates to detach, cleans leftover ALBs and VPC dependencies when needed, then retries Terraform destroy.
+
+Key safety rules:
+- Do not destroy the bootstrap root during routine rebuilds.
+- Keep the Terraform state backend alive.
+- Use the platform workflow for destroy instead of ad hoc local cleanup.
+- If Terraform writes errored.tfstate, push that recovered state before applying again.
+
+Slide message:
+"The project includes operational guardrails so the environment can be destroyed and recreated cleanly."
+
+
+Phase 13: Final End-To-End Flow
+Goal:
+Summarize how everything works together.
+
+Description:
+The full flow starts with Terraform bootstrap, then Terraform creates the AWS platform and EKS add-ons. Helm defines the services, Argo CD deploys them from Git, GitHub Actions updates image tags and manages platform changes, and observability tools monitor the result. DNS and HTTPS make the app and tools accessible, while safe destroy logic supports repeatable rebuilds.
+
+Simple flow:
+1. Bootstrap Terraform state and GitHub AWS access.
+2. Apply Terraform for VPC, EKS, ECR, RDS, secrets, DNS, and add-ons.
+3. Deploy platform controllers such as Argo CD and External Secrets.
+4. Package services with Helm.
+5. Sync services with Argo CD.
+6. Expose services through ALB, Route 53, and ACM.
+7. Monitor with Prometheus, Grafana, Loki, Alertmanager, and Zipkin.
+8. Update image tags through GitHub Actions.
+9. Destroy and recreate safely when needed.
+
+Slide message:
+"This is a complete cloud-native delivery platform: infrastructure, deployment, security, observability, and operations are all managed as code."
+
+
+Suggested Slide Order
+
+1. Project Overview
+2. Repository Structure
+3. Bootstrap Foundation
+4. AWS Platform Built By Terraform
+5. EKS Runtime Add-ons
+6. Helm Packaging For Services
+7. GitOps With Argo CD
+8. CI/CD With GitHub Actions
+9. Secrets And Configuration
+10. DNS And HTTPS Access
+11. Observability And Alerting
+12. Safe Destroy And Reapply
+13. Final Architecture Flow
+
+
+Short Closing Summary
+
+This project demonstrates how to run a microservices application on AWS using modern DevOps practices. Terraform builds the infrastructure, Helm packages the services, Argo CD deploys from Git, GitHub Actions automates changes, and the observability stack helps operate the system. The result is a repeatable platform that can be applied, monitored, updated, destroyed, and recreated with clear ownership across every layer.

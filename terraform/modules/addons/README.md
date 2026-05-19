@@ -115,9 +115,9 @@ The application namespace depends on External Secrets Operator so Terraform
 destroys application ExternalSecret resources before uninstalling the controller.
 The platform workflow also removes GitOps Applications, ingresses, stale
 ExternalSecret finalizers, and TargetGroupBindings before Terraform destroys the
-cluster. It can also force-delete leftover cluster ALBs and waits for platform
-ACM certificates to detach from ALB listeners so certificate deletion does not
-race the AWS Load Balancer Controller cleanup.
+cluster. It can also force-delete leftover cluster ALBs and VPC dependencies,
+then waits for platform ACM certificates to detach from ALB listeners so
+certificate deletion does not race the AWS Load Balancer Controller cleanup.
 
 ## Verification
 

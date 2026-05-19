@@ -49,6 +49,10 @@ eks_admin_role_arns = [
 ]
 ```
 
+Add the stable IAM role you use for local applies to `eks_admin_role_arns`.
+Terraform will create an EKS access entry for that role so the Kubernetes and
+Helm providers can manage in-cluster resources.
+
 If GitHub Actions owns the OpenAI runtime secret, keep:
 
 ```hcl

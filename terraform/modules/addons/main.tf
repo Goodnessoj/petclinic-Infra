@@ -168,6 +168,10 @@ resource "helm_release" "external_secrets" {
       }
     })
   ]
+
+  depends_on = [
+    helm_release.aws_load_balancer_controller
+  ]
 }
 
 resource "helm_release" "external_secrets_manifests" {
@@ -204,6 +208,9 @@ resource "helm_release" "aws_load_balancer_controller" {
       clusterName = var.cluster_name
       region      = var.aws_region
       vpcId       = var.vpc_id
+      # The service mutator webhook is cluster-wide and can block unrelated
+      # Helm installs while the controller webhook endpoints are starting.
+      enableServiceMutatorWebhook = false
       serviceAccount = {
         create = true
         name   = local.load_balancer_service_account
