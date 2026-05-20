@@ -1,7 +1,7 @@
 nameOverride: customers-service
 
 image:
-  tag: "e4b6dbf"
+  tag: "e5ae608"
   pullPolicy: IfNotPresent
 
 service:
